@@ -22,7 +22,11 @@ class EntitiesClient(BaseNewRelicClient):
         domain: str | None = None,
         tags: list[dict[str, str]] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for entities using NerdGraph entitySearch"""
+        """Search for entities using NerdGraph entitySearch.
+
+        Note: NerdGraph returns a maximum of 200 results per page. Pagination
+        via nextCursor is not currently implemented, so results are capped at 200.
+        """
         # Build query fragment
         parts = []
         if name:
@@ -84,7 +88,7 @@ class EntitiesClient(BaseNewRelicClient):
         entities = search.get("results", {}).get("entities", [])
         return entities
 
-    async def get_entity_tags(self, guid: str) -> list[dict[str, Any]]:
+    async def get_entity_tags(self, guid: str) -> dict[str, Any]:
         """Get all tags for an entity by GUID"""
         query = """
         {
@@ -187,7 +191,7 @@ class EntitiesClient(BaseNewRelicClient):
                 "SELECT latest(`newrelic.sli.good`) as good, latest(`newrelic.sli.valid`) as valid, "
                 "latest(`newrelic.sli.bad`) as bad "
                 "FROM Metric WHERE entity.type = 'SERVICE_LEVEL' "
-                "FACET entity.guid, entity.name SINCE 1 hour ago LIMIT 50"
+                "FACET entity.guid, entity.name SINCE 1 hour ago LIMIT 200"
             )
             sli_rows = (
                 nrql_result.get("data", {})
@@ -197,12 +201,16 @@ class EntitiesClient(BaseNewRelicClient):
                 .get("results", [])
             )
             sli_by_guid = {r.get("entity.guid"): r for r in sli_rows if r.get("entity.guid")}
+            enriched = []
             for e in entities:
                 sli_data = sli_by_guid.get(e.get("guid"), {})
+                compliance = None
                 if sli_data:
                     good = sli_data.get("good", 0) or 0
                     valid = sli_data.get("valid", 0) or 0
-                    e["sliCompliance"] = round((good / valid * 100), 2) if valid > 0 else None
+                    compliance = round((good / valid * 100), 2) if valid > 0 else None
+                enriched.append({**e, "sliCompliance": compliance})
+            entities = enriched
 
         return entities or []
 

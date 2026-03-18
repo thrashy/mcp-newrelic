@@ -98,7 +98,7 @@ class AddWidgetHandler(ToolHandlerStrategy):
 
         if raw_configuration is not None:
             if "nrqlQueries" not in raw_configuration:
-                raw_configuration["nrqlQueries"] = build_raw_nrql_queries(account_id, widget_query)
+                raw_configuration = {**raw_configuration, "nrqlQueries": build_raw_nrql_queries(account_id, widget_query)}
             widget_config["rawConfiguration"] = raw_configuration
 
         result = await self.client.add_widget_to_dashboard(dashboard_guid, widget_config)
@@ -218,7 +218,7 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
 
         if raw_configuration is not None:
             if "nrqlQueries" not in raw_configuration and widget_query:
-                raw_configuration["nrqlQueries"] = build_raw_nrql_queries(account_id, widget_query)
+                raw_configuration = {**raw_configuration, "nrqlQueries": build_raw_nrql_queries(account_id, widget_query)}
             widget_config["rawConfiguration"] = raw_configuration
             if "visualization" not in widget_config:
                 widget_config["visualization"] = {"id": f"viz.{widget_type}"}

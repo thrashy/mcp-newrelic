@@ -155,7 +155,7 @@ class ListSyntheticMonitorsHandler(ToolHandlerStrategy):
             severity = m.get("alertSeverity")
             if severity:
                 lines.append(f"  Alert severity: {severity}")
-            summary = m.get("monitorSummary", {})
+            summary = m.get("monitorSummary") or {}
             if summary:
                 status = summary.get("status", "?")
                 success_rate = summary.get("successRate")
@@ -163,7 +163,7 @@ class ListSyntheticMonitorsHandler(ToolHandlerStrategy):
                 running = summary.get("locationsRunning", 0)
                 lines.append(f"  Status: {status}")
                 if success_rate is not None:
-                    lines.append(f"  Success rate: {success_rate:.1f}%")
+                    lines.append(f"  Success rate: {success_rate * 100:.1f}%")
                 lines.append(f"  Locations: {running - failing}/{running} passing")
             lines.append("")
 
@@ -193,7 +193,7 @@ class GetSyntheticResultsHandler(ToolHandlerStrategy):
             lines.append(f"Status: {summary.get('status', '?')}")
             success_rate = summary.get("successRate")
             if success_rate is not None:
-                lines.append(f"Success rate: {success_rate:.1f}%")
+                lines.append(f"Success rate: {success_rate * 100:.1f}%")
             failing = summary.get("locationsFailing", 0)
             running = summary.get("locationsRunning", 0)
             lines.append(f"Locations: {running - failing}/{running} passing")
