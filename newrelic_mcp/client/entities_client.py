@@ -43,10 +43,18 @@ class EntitiesClient:
         entity_type: str | None = None,
         domain: str | None = None,
         tags: list[dict[str, str]] | None = None,
+        limit: int = 25,
+        minimal_output: bool = False,
     ) -> list[dict[str, Any]] | ApiError:
         """Search for entities using NerdGraph entitySearch with cursor-based pagination.
 
-        Follows nextCursor to retrieve all matching entities (up to 10 pages / ~2000 results).
+        Args:
+            name: Partial name match (LIKE).
+            entity_type: Entity type filter (APPLICATION, HOST, MONITOR, etc.).
+            domain: Domain filter (APM, INFRA, SYNTH, BROWSER, MOBILE, EXT).
+            tags: Tag filters as [{"key": ..., "value": ...}].
+            limit: Maximum entities to return (default 25, max 200).
+            minimal_output: If True, omit tags and extra metadata from results.
         """
         parts = []
         if name:
@@ -61,46 +69,72 @@ class EntitiesClient:
 
         query_string = " AND ".join(parts) if parts else "domain IN ('APM', 'INFRA', 'SYNTH', 'BROWSER')"
 
-        query = """
-        query($searchQuery: String!, $cursor: String) {
-          actor {
-            entitySearch(query: $searchQuery) {
-              results(cursor: $cursor) {
-                entities {
-                  guid
-                  name
-                  entityType
-                  domain
-                  type
-                  alertSeverity
-                  reporting
-                  tags {
-                    key
-                    values
-                  }
-                  ... on ApmApplicationEntityOutline {
-                    language
-                    applicationId
-                  }
-                  ... on SyntheticMonitorEntityOutline {
-                    monitorType
-                    monitorId
-                    period
-                  }
-                  ... on InfrastructureHostEntityOutline {
-                    hostSummary {
-                      cpuUtilizationPercent
-                      memoryUsedPercent
+        # Use a lighter query when minimal_output is requested
+        if minimal_output:
+            query = """
+            query($searchQuery: String!, $cursor: String) {
+              actor {
+                entitySearch(query: $searchQuery) {
+                  results(cursor: $cursor) {
+                    entities {
+                      guid
+                      name
+                      entityType
+                      domain
+                      type
+                      alertSeverity
+                      reporting
                     }
+                    nextCursor
                   }
+                  count
                 }
-                nextCursor
               }
-              count
             }
-          }
-        }
-        """
+            """
+        else:
+            query = """
+            query($searchQuery: String!, $cursor: String) {
+              actor {
+                entitySearch(query: $searchQuery) {
+                  results(cursor: $cursor) {
+                    entities {
+                      guid
+                      name
+                      entityType
+                      domain
+                      type
+                      alertSeverity
+                      reporting
+                      tags {
+                        key
+                        values
+                      }
+                      ... on ApmApplicationEntityOutline {
+                        language
+                        applicationId
+                      }
+                      ... on SyntheticMonitorEntityOutline {
+                        monitorType
+                        monitorId
+                        period
+                      }
+                      ... on InfrastructureHostEntityOutline {
+                        hostSummary {
+                          cpuUtilizationPercent
+                          memoryUsedPercent
+                        }
+                      }
+                    }
+                    nextCursor
+                  }
+                  count
+                }
+              }
+            }
+            """
+
+        effective_limit = min(limit, 200)
 
         try:
             result = await self._base.paginate_graphql(
@@ -108,6 +142,7 @@ class EntitiesClient:
                 {"searchQuery": query_string},
                 _ENTITY_SEARCH_PATH,
                 "entities",
+                limit=effective_limit,
             )
             return result.items
         except API_ERRORS as e:

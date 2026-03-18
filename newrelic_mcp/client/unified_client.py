@@ -21,6 +21,7 @@ class NewRelicClient:
 
     def __init__(self, config: NewRelicConfig):
         self._base = BaseNewRelicClient(config)
+        self.base = self._base
         self.monitoring = MonitoringClient(self._base)
         self.alerts = AlertsClient(self._base)
         self.dashboards = DashboardsClient(self._base)

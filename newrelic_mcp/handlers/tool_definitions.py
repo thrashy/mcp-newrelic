@@ -12,7 +12,17 @@ def get_monitoring_tools() -> list[Tool]:
     return [
         Tool(
             name="query_nrql",
-            description="Execute a NRQL query against New Relic",
+            description=(
+                "Execute a NRQL query against New Relic. "
+                "Common event types: Transaction, TransactionError, Span, Log, Metric, "
+                "KeyTransaction, ExternalCall, SyntheticCheck, PageView, MobileSession. "
+                "Tips: Use SINCE X hours/days ago for time ranges (e.g. SINCE 3 hours ago). "
+                "For high-volume apps, use shorter time windows (1-3 hours) to avoid query timeouts. "
+                "Use TIMESERIES for trend data over time. Use FACET for grouping results. "
+                "Prefer uniqueCount() over uniques() for high-cardinality attributes. "
+                "Use LIMIT to cap result rows (default is 10 for FACET queries). "
+                "Time range formats: SINCE 1 hour ago, SINCE '2024-01-15 00:00:00', SINCE timestamp."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -659,7 +669,9 @@ def get_entity_tools() -> list[Tool]:
                 "Search for New Relic entities (APM apps, hosts, synthetic monitors, browsers, etc.) "
                 "by name, type, domain, or tags. Returns GUIDs, alert severity, and metadata. "
                 "Use domain values: APM, INFRA, SYNTH, BROWSER, MOBILE, EXT. "
-                "Use type values: APPLICATION, HOST, MONITOR, etc."
+                "Use type values: APPLICATION, HOST, MONITOR, KEY_TRANSACTION, etc. "
+                "Use minimal_output=true to reduce response size (omits tags and type-specific fields). "
+                "Use limit to cap results (default 25, max 200)."
             ),
             inputSchema={
                 "type": "object",
@@ -667,7 +679,7 @@ def get_entity_tools() -> list[Tool]:
                     "name": {"type": "string", "description": "Entity name to search for (partial match)"},
                     "entity_type": {
                         "type": "string",
-                        "description": "Entity type filter (e.g. APPLICATION, HOST, MONITOR)",
+                        "description": "Entity type filter (e.g. APPLICATION, HOST, MONITOR, KEY_TRANSACTION)",
                     },
                     "domain": {
                         "type": "string",
@@ -685,8 +697,50 @@ def get_entity_tools() -> list[Tool]:
                             "required": ["key", "value"],
                         },
                     },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum entities to return (default 25, max 200)",
+                        "default": 25,
+                        "maximum": 200,
+                    },
+                    "minimal_output": {
+                        "type": "boolean",
+                        "description": "If true, return only name, GUID, domain, type, and alertSeverity (omit tags and type-specific fields) to reduce response size",
+                        "default": False,
+                    },
                     "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
+            },
+        ),
+        Tool(
+            name="decode_entity_guid",
+            description=(
+                "Decode a New Relic entity GUID (base64-encoded) to reveal its components: "
+                "account ID, domain (APM, EXT, INFRA, etc.), entity type (APPLICATION, KEY_TRANSACTION, HOST, etc.), "
+                "and domain ID. Useful for understanding what an entity GUID refers to without making an API call."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {"type": "string", "description": "The NR entity GUID to decode"},
+                },
+                "required": ["guid"],
+            },
+        ),
+        Tool(
+            name="get_entity",
+            description=(
+                "Look up a single New Relic entity by its GUID. Returns full details including "
+                "name, type, domain, alert severity, account info, tags, permalink, and type-specific "
+                "metadata (language for APM apps, monitor type for synthetics, host metrics for infra). "
+                "Use entity_search to find GUIDs, or decode_entity_guid to inspect a GUID without an API call."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {"type": "string", "description": "Entity GUID to look up"},
+                },
+                "required": ["guid"],
             },
         ),
         Tool(

@@ -24,6 +24,20 @@ class ToolError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class DecodedEntityGuid:
+    """Components of a decoded New Relic entity GUID.
+
+    NR entity GUIDs are base64-encoded strings in the format:
+    accountId|domain|entityType|domainId
+    """
+
+    account_id: int
+    domain: str
+    entity_type: str
+    domain_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class PaginatedResult:
     """Result from a paginated or list API query.
 

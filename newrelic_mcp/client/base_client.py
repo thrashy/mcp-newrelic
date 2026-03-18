@@ -4,16 +4,27 @@ Base New Relic API client.
 Provides common HTTP client functionality and NRQL query capabilities.
 """
 
+import base64
 import logging
 from typing import Any
 
 import httpx
 
 from ..config import NewRelicConfig
-from ..types import ApiError, PaginatedResult
+from ..types import ApiError, DecodedEntityGuid, PaginatedResult
 from ..utils.graphql_helpers import extract_nested_data
 
 logger = logging.getLogger(__name__)
+
+# Maps NR error codes to actionable hints (mirrors Go client error classification)
+_NRQL_ERROR_HINTS: dict[str, str] = {
+    "NRDB:1109": "Query timed out. Try a shorter time range (e.g. SINCE 1 hour ago), add LIMIT, or narrow with WHERE clauses.",
+    "NRDB:1107005": "Query syntax or function error. Check function names (e.g. use uniqueCount() instead of uniques() for high-cardinality attributes) and attribute types.",
+    "NRDB:1107001": "Invalid NRQL syntax. Verify your SELECT, FROM, WHERE, and FACET clauses.",
+    "NRDB:1107002": "Invalid event type. Check that the FROM clause references a valid event type (e.g. Transaction, Span, Log, Metric).",
+    "NRDB:1107003": "Invalid attribute. The attribute in your query does not exist for this event type.",
+    "NRDB:1107004": "Invalid function. Check the NRQL function name and argument types.",
+}
 
 
 class BaseNewRelicClient:
@@ -42,8 +53,16 @@ class BaseNewRelicClient:
         result: dict[str, Any] = response.json()
 
         if "errors" in result:
-            logger.error("GraphQL errors: %s", result['errors'])
-            raise ValueError(f"GraphQL query failed: {result['errors']}")
+            errors = result["errors"]
+            logger.error("GraphQL errors: %s", errors)
+            hint = ""
+            if errors and isinstance(errors, list):
+                error_code = errors[0].get("extensions", {}).get("errorCode", "")
+                hint = _NRQL_ERROR_HINTS.get(error_code, "")
+            msg = f"GraphQL query failed: {errors}"
+            if hint:
+                msg += f"\nHint: {hint}"
+            raise ValueError(msg)
 
         return result
 
@@ -83,6 +102,81 @@ class BaseNewRelicClient:
         result = await self._execute_http_request(graphql_query)
         logger.debug("Query result: %s", result)
         return result
+
+    @staticmethod
+    def decode_entity_guid(guid: str) -> DecodedEntityGuid:
+        """Decode a NR entity GUID (base64) into its components.
+
+        Follows the same format as the Go client (newrelic-client-go):
+        base64(accountId|domain|entityType|domainId)
+        Handles both padded and unpadded (RawStdEncoding) base64.
+        """
+        try:
+            # Normalize padding — handles both padded and unpadded input
+            padded = guid + "=" * (-len(guid) % 4)
+            decoded = base64.b64decode(padded).decode("utf-8")
+        except Exception as e:
+            raise ValueError(f"Invalid entity GUID — not valid base64: {e}") from e
+
+        parts = decoded.split("|")
+        if len(parts) < 4:
+            raise ValueError(
+                f"Invalid entity GUID — expected at least 4 parts delimited by '|', got {len(parts)}: {decoded}"
+            )
+
+        try:
+            account_id = int(parts[0])
+        except ValueError as e:
+            raise ValueError(f"Invalid account ID in entity GUID: {parts[0]}") from e
+
+        return DecodedEntityGuid(
+            account_id=account_id,
+            domain=parts[1],
+            entity_type=parts[2],
+            domain_id=parts[3],
+        )
+
+    async def get_entity(self, guid: str) -> dict[str, Any] | ApiError:
+        """Look up a single entity by GUID, returning key details."""
+        query = """
+        query($guid: EntityGuid!) {
+          actor {
+            entity(guid: $guid) {
+              guid
+              name
+              entityType
+              domain
+              type
+              alertSeverity
+              reporting
+              permalink
+              account { id name }
+              tags { key values }
+              ... on ApmApplicationEntity {
+                language
+                applicationId
+                runningAgentVersions { minVersion maxVersion }
+              }
+              ... on SyntheticMonitorEntity {
+                monitorType
+                monitorId
+                period
+              }
+              ... on InfrastructureHostEntity {
+                hostSummary { cpuUtilizationPercent memoryUsedPercent }
+              }
+            }
+          }
+        }
+        """
+        try:
+            result = await self.execute_graphql(query, {"guid": guid})
+            entity: dict[str, Any] | None = result.get("data", {}).get("actor", {}).get("entity")
+            if not entity:
+                return ApiError(f"Entity not found for GUID: {guid}")
+            return entity
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+            return ApiError(f"Failed to get entity: {e}")
 
     async def execute_graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         """Execute a GraphQL query with optional variables"""

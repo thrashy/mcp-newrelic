@@ -39,9 +39,11 @@ from .strategies.dashboard import (
 )
 from .strategies.entities import (
     AddTagsHandler,
+    DecodeEntityGuidHandler,
     DeleteTagsHandler,
     DeleteTagValuesHandler,
     EntitySearchHandler,
+    GetEntityHandler,
     GetEntityTagsHandler,
     GetSyntheticResultsHandler,
     ListServiceLevelsHandler,
@@ -100,6 +102,8 @@ class ToolHandlers:
             "list_notification_channels": ListNotificationChannelsHandler(client, config),
             "list_workflows": ListWorkflowsHandler(client, config),
             "entity_search": EntitySearchHandler(client, config),
+            "decode_entity_guid": DecodeEntityGuidHandler(client, config),
+            "get_entity": GetEntityHandler(client, config),
             "get_entity_tags": GetEntityTagsHandler(client, config),
             "add_tags_to_entity": AddTagsHandler(client, config),
             "replace_tags_on_entity": ReplaceTagsHandler(client, config),

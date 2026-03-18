@@ -127,6 +127,119 @@ class TestExecuteGraphql:
         assert "variables" not in payload
 
 
+class TestDecodeEntityGuid:
+    def test_decodes_key_transaction_guid(self):
+        # Synthetic GUID: 9999999|EXT|KEY_TRANSACTION|1234567890123456789
+        guid = "OTk5OTk5OXxFWFR8S0VZX1RSQU5TQUNUSU9OfDEyMzQ1Njc4OTAxMjM0NTY3ODk="
+        result = BaseNewRelicClient.decode_entity_guid(guid)
+        assert result.account_id == 9999999
+        assert result.domain == "EXT"
+        assert result.entity_type == "KEY_TRANSACTION"
+        assert result.domain_id == "1234567890123456789"
+
+    def test_decodes_apm_application_guid(self):
+        # Manually construct: 12345|APM|APPLICATION|67890
+        import base64
+        guid = base64.b64encode(b"12345|APM|APPLICATION|67890").decode()
+        result = BaseNewRelicClient.decode_entity_guid(guid)
+        assert result.account_id == 12345
+        assert result.domain == "APM"
+        assert result.entity_type == "APPLICATION"
+        assert result.domain_id == "67890"
+
+    def test_invalid_base64_raises(self):
+        with pytest.raises(ValueError, match="not valid base64"):
+            BaseNewRelicClient.decode_entity_guid("not-valid-!!!-base64")
+
+    def test_too_few_parts_raises(self):
+        import base64
+        guid = base64.b64encode(b"12345|APM").decode()
+        with pytest.raises(ValueError, match="expected at least 4 parts"):
+            BaseNewRelicClient.decode_entity_guid(guid)
+
+    def test_invalid_account_id_raises(self):
+        import base64
+        guid = base64.b64encode(b"notanint|APM|APPLICATION|67890").decode()
+        with pytest.raises(ValueError, match="Invalid account ID"):
+            BaseNewRelicClient.decode_entity_guid(guid)
+
+
+class TestGetEntity:
+    async def test_returns_entity(self):
+        client = BaseNewRelicClient(_make_config())
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "data": {"actor": {"entity": {
+                "guid": "abc123",
+                "name": "My App",
+                "domain": "APM",
+                "type": "APPLICATION",
+            }}}
+        }
+        mock_response.raise_for_status = MagicMock()
+        client._http_client.post = AsyncMock(return_value=mock_response)
+
+        result = await client.get_entity("abc123")
+        assert result["name"] == "My App"
+        assert result["domain"] == "APM"
+
+    async def test_entity_not_found_returns_api_error(self):
+        from newrelic_mcp.types import ApiError
+        client = BaseNewRelicClient(_make_config())
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": {"actor": {"entity": None}}}
+        mock_response.raise_for_status = MagicMock()
+        client._http_client.post = AsyncMock(return_value=mock_response)
+
+        result = await client.get_entity("nonexistent")
+        assert isinstance(result, ApiError)
+        assert "not found" in result.message
+
+
+class TestExecuteHttpRequestErrorHints:
+    async def test_nrql_timeout_includes_hint(self):
+        client = BaseNewRelicClient(_make_config())
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "errors": [{
+                "message": "query timed out",
+                "extensions": {"errorClass": "TIMEOUT", "errorCode": "NRDB:1109"},
+            }]
+        }
+        mock_response.raise_for_status = MagicMock()
+        client._http_client.post = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(ValueError, match="shorter time range"):
+            await client._execute_http_request({"query": "test"})
+
+    async def test_nrql_syntax_error_includes_hint(self):
+        client = BaseNewRelicClient(_make_config())
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "errors": [{
+                "message": "An error occurred",
+                "extensions": {"errorClass": "SERVER_ERROR", "errorCode": "NRDB:1107005"},
+            }]
+        }
+        mock_response.raise_for_status = MagicMock()
+        client._http_client.post = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(ValueError, match="uniqueCount"):
+            await client._execute_http_request({"query": "test"})
+
+    async def test_unknown_error_code_no_hint(self):
+        client = BaseNewRelicClient(_make_config())
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "errors": [{"message": "something else", "extensions": {"errorCode": "UNKNOWN:999"}}]
+        }
+        mock_response.raise_for_status = MagicMock()
+        client._http_client.post = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(ValueError, match="GraphQL query failed"):
+            await client._execute_http_request({"query": "test"})
+
+
 class TestPaginateGraphql:
     async def test_single_page(self):
         client = BaseNewRelicClient(_make_config())
