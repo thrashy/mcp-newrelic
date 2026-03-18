@@ -13,9 +13,15 @@ A comprehensive Model Context Protocol (MCP) server for New Relic monitoring, ob
 
 ### Dashboard Management
 - **Dashboard Operations**: Create, read, update, and delete dashboards
-- **Widget Management**: Add, update, and remove dashboard widgets
+- **Widget Management**: Add, update, and remove dashboard widgets with `rawConfiguration` support for dual y-axis, fixed y-axis ranges, legend control, and chart styles
 - **Search & Discovery**: Find dashboards by name or GUID
 - **Visualization Support**: Line charts, bar charts, pie charts, tables, billboards
+
+### Entity Management
+- **Entity Search**: Find any New Relic entity (APM apps, hosts, synthetic monitors, browsers) by name, type, domain, or tags
+- **Entity Tagging**: Add, update, and delete tags on any entity
+- **Service Levels**: List all SLIs/SLOs with compliance data and objectives
+- **Synthetic Monitors**: List monitors with status, success rate, and location health; query recent check results
 
 ### Alert & Notification System
 - **Alert Policies**: Create and manage alert policies with configurable incident preferences
@@ -155,6 +161,15 @@ Configure your MCP client to connect to the server. Example for Claude Desktop:
 - **`update_widget`**: Update existing dashboard widgets
 - **`delete_widget`**: Remove widgets from dashboards
 
+### Entity Management
+- **`entity_search`**: Search for any entity by name, type (APPLICATION, HOST, MONITOR), or domain (APM, INFRA, SYNTH, BROWSER). Returns GUIDs, alert severity, tags, and type-specific fields. Capped at 200 results.
+- **`get_entity_tags`**: Get all tags for an entity by GUID
+- **`add_tags_to_entity`**: Add or update key-value tags on an entity
+- **`delete_tags_from_entity`**: Remove tag keys from an entity
+- **`list_service_levels`**: List all SLIs/SLOs with alert severity and compliance % (last 1h)
+- **`list_synthetic_monitors`**: List all synthetic monitors with status, success rate, and location health
+- **`get_synthetic_results`**: Get recent pass/fail check results per location for a specific monitor
+
 ### Alert & Notification Management
 - **`create_alert_policy`**: Create alert policies with incident preferences
 - **`create_nrql_condition`**: Create NRQL-based alert conditions
@@ -190,6 +205,7 @@ Access structured data through these MCP resources:
 - **`NewRelicClient`**: Unified client interface combining all specialized clients
 - **`AlertsClient`**: Alert policies, conditions, and notification management
 - **`DashboardsClient`**: Dashboard and widget operations
+- **`EntitiesClient`**: Entity search, tagging, service levels, and synthetic monitors
 - **`MonitoringClient`**: NRQL queries and performance monitoring
 - **`ToolHandlers`**: Strategy-based dispatcher for MCP tool calls
 - **`ResourceHandlers`**: MCP resource operations and data formatting
