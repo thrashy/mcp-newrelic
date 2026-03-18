@@ -157,7 +157,65 @@ def get_dashboard_tools():
         ),
         Tool(
             name="add_widget_to_dashboard",
-            description="Add a widget to an existing dashboard (requires dashboard GUID and widget configuration)",
+            description="""Add a widget to an existing dashboard (requires dashboard GUID and widget configuration).
+
+Use the optional `raw_configuration` parameter to control advanced chart display settings. When provided,
+it is sent as `rawConfiguration` to NerdGraph and takes precedence over the typed configuration.
+The `raw_configuration` object should include `nrqlQueries` plus any display options.
+
+**IMPORTANT: `nrqlQueries` uses `accountIds` (array) not `accountId` (scalar):**
+`"nrqlQueries": [{"accountIds": [123456], "query": "SELECT ..."}]`
+This is auto-populated from widget_query if omitted.
+
+**Fixed Y-Axis Range (left axis):**
+`{"yAxisLeft": {"min": 0, "max": 500, "zero": false}}`
+
+**Dual Y-Axis (second axis on right):**
+IMPORTANT: dual y-axis requires the COMPLETE rawConfiguration (not just yAxisRight).
+NR automatically appends an aggregation suffix to series names: percentile() → " (99%)", average() → no suffix.
+The alias in the query should NOT include the suffix — NR adds it. Use the rendered name in series[].name.
+Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for percentile():
+```json
+{
+  "nrqlQueries": [{"accountIds": [123456], "query": "SELECT count(*) AS 'Left', percentile(duration, 99) AS 'My Series' FROM ... TIMESERIES"}],
+  "chartStyles": {"lineInterpolation": "linear"},
+  "facet": {"showOtherSeries": false},
+  "legend": {"enabled": true},
+  "markers": {"displayedTypes": {"criticalViolations": false, "deployments": true, "relatedDeployments": true, "warningViolations": false}},
+  "platformOptions": {"ignoreTimeRange": false},
+  "thresholds": {"isLabelVisible": true},
+  "yAxisLeft": {"zero": true},
+  "yAxisRight": {"zero": true, "series": [{"name": "My Series (99%)"}]}
+}
+```
+
+**Hide Legend:**
+`{"legend": {"enabled": false}}`
+
+**Facet - show/hide Other series:**
+`{"facet": {"showOtherSeries": true}}`
+
+**Ignore dashboard time picker:**
+`{"platformOptions": {"ignoreTimeRange": true}}`
+
+**Threshold label visibility (shows/hides threshold labels on chart):**
+`{"thresholds": {"isLabelVisible": true}}`
+
+**Chart line style:**
+`{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
+
+**Deployment markers:**
+`{"markers": {"displayedTypes": {"deployments": true, "relatedDeployments": true, "criticalViolations": false, "warningViolations": false}}}`
+
+**Combined example (fixed range + no legend):**
+```json
+{
+  "nrqlQueries": [{"accountIds": [123456], "query": "SELECT count(*) FROM Log TIMESERIES"}],
+  "yAxisLeft": {"min": 0, "max": 1000, "zero": true},
+  "legend": {"enabled": false}
+}
+```
+Note: logarithmic scale is not supported by New Relic for line/area charts.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -168,6 +226,20 @@ def get_dashboard_tools():
                         "type": "string",
                         "description": "Type of widget (line, area, bar, pie, table, billboard, etc.)",
                         "default": "line",
+                    },
+                    "raw_configuration": {
+                        "type": "object",
+                        "description": (
+                            "Advanced chart display configuration sent as rawConfiguration to NerdGraph. "
+                            "Must include 'nrqlQueries' array with accountIds (array, not scalar). "
+                            "Supports: yAxisLeft ({min, max, zero}), yAxisRight ({zero, series:[{name}]}), "
+                            "legend ({enabled}), facet ({showOtherSeries}), platformOptions ({ignoreTimeRange}), "
+                            "thresholds ({isLabelVisible}), chartStyles ({lineInterpolation: linear/step/smooth}), "
+                            "markers ({displayedTypes: {deployments, relatedDeployments, criticalViolations, warningViolations}}). "
+                            "Note: logarithmic scale is NOT supported. "
+                            "Overrides the typed configuration when provided."
+                        ),
+                        "additionalProperties": True,
                     },
                 },
                 "required": ["dashboard_guid", "widget_title", "widget_query"],
@@ -200,7 +272,40 @@ def get_dashboard_tools():
         ),
         Tool(
             name="update_widget",
-            description="Update an existing widget on a dashboard",
+            description="""Update an existing widget on a dashboard.
+
+Use the optional `raw_configuration` parameter to control advanced chart display settings. When provided,
+it is sent as `rawConfiguration` to NerdGraph and takes precedence over the typed configuration.
+The `raw_configuration` object should include `nrqlQueries` plus any display options.
+
+**IMPORTANT: `nrqlQueries` uses `accountIds` (array) not `accountId` (scalar):**
+`"nrqlQueries": [{"accountIds": [123456], "query": "SELECT ..."}]`
+This is auto-populated from widget_query if omitted.
+
+**Fixed Y-Axis Range (left axis):**
+`{"yAxisLeft": {"min": 0, "max": 500, "zero": false}}`
+
+**Dual Y-Axis (second axis on right):**
+IMPORTANT: requires the COMPLETE rawConfiguration. NR appends aggregation suffix to series names automatically
+(percentile() → " (99%)", average() → no suffix). Query alias should NOT include the suffix.
+See add_widget_to_dashboard for the full dual y-axis example.
+
+**Hide Legend:**
+`{"legend": {"enabled": false}}`
+
+**Facet - show/hide Other series:**
+`{"facet": {"showOtherSeries": true}}`
+
+**Ignore dashboard time picker:**
+`{"platformOptions": {"ignoreTimeRange": true}}`
+
+**Threshold label visibility:**
+`{"thresholds": {"isLabelVisible": true}}`
+
+**Chart line style:**
+`{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
+
+Note: logarithmic scale is not supported by New Relic for line/area charts.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -212,6 +317,19 @@ def get_dashboard_tools():
                         "type": "string",
                         "description": "New widget type (line, area, bar, pie, table, billboard, etc.)",
                         "default": "line",
+                    },
+                    "raw_configuration": {
+                        "type": "object",
+                        "description": (
+                            "Advanced chart display configuration sent as rawConfiguration to NerdGraph. "
+                            "Must include 'nrqlQueries' array with accountIds (array, not scalar). "
+                            "Supports: yAxisLeft ({min, max, zero}), yAxisRight ({zero, series:[{name}]}), "
+                            "legend ({enabled}), facet ({showOtherSeries}), platformOptions ({ignoreTimeRange}), "
+                            "thresholds ({isLabelVisible}), chartStyles ({lineInterpolation: linear/step/smooth}). "
+                            "Note: logarithmic scale is NOT supported. "
+                            "Overrides the typed configuration when provided."
+                        ),
+                        "additionalProperties": True,
                     },
                 },
                 "required": ["page_guid", "widget_id"],

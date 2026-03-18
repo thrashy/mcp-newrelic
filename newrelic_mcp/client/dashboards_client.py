@@ -211,6 +211,7 @@ class DashboardsClient(BaseNewRelicClient):
                     visualization {{
                       id
                     }}
+                    rawConfiguration
                     configuration {{
                       area {{
                         nrqlQueries {{
@@ -293,6 +294,7 @@ class DashboardsClient(BaseNewRelicClient):
                         "title": widget.get("title") or "Untitled Widget",
                         "visualization_type": viz_obj.get("id") or "unknown",
                         "configuration": config_obj,
+                        "rawConfiguration": widget.get("rawConfiguration"),
                     }
                     page_info["widgets"].append(widget_info)
 

@@ -5,6 +5,7 @@ from typing import Any
 from mcp.types import TextContent
 
 from ...utils.dashboard_formatters import (
+    build_raw_nrql_queries,
     build_widget_configuration,
     extract_nrql_queries,
     format_dashboard_list,
@@ -86,6 +87,7 @@ class AddWidgetHandler(ToolHandlerStrategy):
         widget_title = arguments["widget_title"]
         widget_query = arguments["widget_query"]
         widget_type = arguments.get("widget_type", "line")
+        raw_configuration = arguments.get("raw_configuration")
 
         # Create widget configuration
         widget_config = {
@@ -94,13 +96,19 @@ class AddWidgetHandler(ToolHandlerStrategy):
             "visualization": {"id": f"viz.{widget_type}"},
         }
 
+        if raw_configuration is not None:
+            if "nrqlQueries" not in raw_configuration:
+                raw_configuration["nrqlQueries"] = build_raw_nrql_queries(account_id, widget_query)
+            widget_config["rawConfiguration"] = raw_configuration
+
         result = await self.client.add_widget_to_dashboard(dashboard_guid, widget_config)
 
         if "error" in result:
             return self._create_error_response(f"adding widget to dashboard: {result['error']}")
 
+        suffix = " (with custom rawConfiguration)" if raw_configuration else ""
         return self._create_success_response(
-            f"Widget '{widget_title}' ({widget_type}) added to dashboard successfully!"
+            f"Widget '{widget_title}' ({widget_type}) added to dashboard successfully{suffix}!"
         )
 
 
@@ -176,12 +184,15 @@ class GetWidgetsHandler(ToolHandlerStrategy):
                         for i, query in enumerate(nrql_queries, 1):
                             widgets_text += f"      {i}. {query}\n"
 
+                    raw_config = widget.get("rawConfiguration")
+                    if raw_config:
+                        widgets_text += f"    rawConfiguration: {raw_config}\n"
+
                     widgets_text += "\n"
 
                 widgets_text += "\n"
 
         return self._create_success_response(widgets_text)
-
 
 
 class UpdateWidgetHandler(ToolHandlerStrategy):
@@ -193,6 +204,7 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
         widget_title = arguments.get("widget_title")
         widget_query = arguments.get("widget_query")
         widget_type = arguments.get("widget_type", "line")
+        raw_configuration = arguments.get("raw_configuration")
 
         # Build widget update configuration
         widget_config = {"id": widget_id}
@@ -204,12 +216,20 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
             widget_config["configuration"] = build_widget_configuration(widget_type, account_id, widget_query)
             widget_config["visualization"] = {"id": f"viz.{widget_type}"}
 
+        if raw_configuration is not None:
+            if "nrqlQueries" not in raw_configuration and widget_query:
+                raw_configuration["nrqlQueries"] = build_raw_nrql_queries(account_id, widget_query)
+            widget_config["rawConfiguration"] = raw_configuration
+            if "visualization" not in widget_config:
+                widget_config["visualization"] = {"id": f"viz.{widget_type}"}
+
         result = await self.client.update_widget(page_guid, widget_id, widget_config)
 
         if "error" in result:
             return self._create_error_response(f"updating widget: {result['error']}")
 
-        return self._create_success_response(f"Widget {widget_id} updated successfully!")
+        suffix = " (with custom rawConfiguration)" if raw_configuration else ""
+        return self._create_success_response(f"Widget {widget_id} updated successfully{suffix}!")
 
 
 class DeleteWidgetHandler(ToolHandlerStrategy):

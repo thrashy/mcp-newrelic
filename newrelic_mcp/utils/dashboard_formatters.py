@@ -48,6 +48,11 @@ def format_dashboard_list(
     return dashboard_text
 
 
+def build_raw_nrql_queries(account_id: str, widget_query: str) -> list[dict[str, Any]]:
+    """Build nrqlQueries array for rawConfiguration using accountIds (array, not scalar)."""
+    return [{"accountIds": [int(account_id)], "query": widget_query}]
+
+
 def build_widget_configuration(widget_type: str, account_id: str, widget_query: str) -> dict[str, Any]:
     """Build widget configuration for different visualization types"""
     nrql_query = {"accountId": int(account_id), "query": widget_query}
