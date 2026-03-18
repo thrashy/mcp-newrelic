@@ -12,7 +12,7 @@ This project uses multiple tools to ensure high code quality:
 ### **MyPy** - Static Type Checker
 - **Type checking**: `uv run mypy newrelic_mcp/`
 - Catches type mismatches and improves code reliability
-- Currently configured in lenient mode, can be made stricter over time
+- Configured with strict settings (`disallow_untyped_defs`, `strict_equality`, `warn_unreachable`, etc.)
 
 ### **Pylint** - Additional Code Analysis
 - **Code analysis**: `uv run pylint newrelic_mcp/`
@@ -45,8 +45,37 @@ uv run ruff check --fix .
 # Run type checking
 uv run mypy newrelic_mcp/
 
+# Run tests
+uv run pytest tests/
+
 # Run all quality checks
 uv run ruff check . && uv run mypy newrelic_mcp/ && uv run pylint newrelic_mcp/
+```
+
+### **Hatch Scripts**
+Convenience scripts are defined in `pyproject.toml` under `[tool.hatch.envs.dev.scripts]`:
+```bash
+uv run hatch run dev:lint        # Run ruff, mypy, and pylint
+uv run hatch run dev:format      # Format with ruff
+uv run hatch run dev:test        # Run pytest
+uv run hatch run dev:all-checks  # All checks including format verification
+```
+
+### **Testing**
+Tests use `pytest` with `pytest-asyncio` for async test support. The `asyncio_mode = "auto"` setting in `pyproject.toml` means async test methods are detected automatically — no `@pytest.mark.asyncio` decorator needed.
+
+```bash
+# Run all tests
+uv run pytest tests/
+
+# Run with verbose output
+uv run pytest tests/ -v
+
+# Run a specific test file
+uv run pytest tests/test_base_client.py
+
+# Stop on first failure
+uv run pytest tests/ -x -q
 ```
 
 ### **IDE Integration**
@@ -74,7 +103,7 @@ uv run ruff check . && uv run mypy newrelic_mcp/ && uv run pylint newrelic_mcp/
 - **`pyproject.toml`**: Ruff, MyPy, and Pylint configuration
 - **`.pre-commit-config.yaml`**: Pre-commit hooks setup
 - **Ruff settings**: Line length 120, Python 3.11+ target
-- **MyPy settings**: Lenient mode initially, can be made stricter
+- **MyPy settings**: Strict mode with `disallow_untyped_defs` and `strict_equality`
 
 ## Code Style Standards
 
@@ -94,13 +123,10 @@ uv run ruff check . && uv run mypy newrelic_mcp/ && uv run pylint newrelic_mcp/
 - Prefer specific exception types over generic `Exception`
 - Add meaningful error messages
 
-## Incremental Improvement
+## Future Improvements
 
-The tooling is configured to be **lenient initially** but can be made stricter over time:
+Potential areas for further tooling improvements:
 
-1. **Phase 1** (Current): Basic linting with Ruff, lenient MyPy
-2. **Phase 2**: Enable stricter MyPy settings gradually
-3. **Phase 3**: Add more Pylint rules, enable additional Ruff rules
-4. **Phase 4**: Consider adding tools like `bandit` for security scanning
-
-This approach allows existing code to pass checks while encouraging better practices for new code.
+- Add `bandit` for security scanning
+- Enable additional Ruff rule sets as the codebase matures
+- Add test coverage reporting with `pytest-cov`
