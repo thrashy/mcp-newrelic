@@ -4,6 +4,7 @@ from typing import Any
 
 from mcp.types import TextContent
 
+from ...types import PaginatedResult
 from .base import ToolHandlerStrategy
 
 
@@ -256,6 +257,17 @@ class ListAlertConditionsHandler(ToolHandlerStrategy):
 
         result = await self.client.alerts.get_alert_conditions(account_id, policy_id, name=name, query=query)
 
+        # Resolve policy IDs to names
+        if isinstance(result, PaginatedResult) and result.items:
+            policy_ids = {c.get("policyId") for c in result.items if c.get("policyId")}
+            if policy_ids:
+                policies_result = await self.client.alerts.get_alert_policies(account_id)
+                if isinstance(policies_result, PaginatedResult) and policies_result.items:
+                    policy_map = {str(p["id"]): p.get("name", "Unknown") for p in policies_result.items}
+                    for condition in result.items:
+                        pid = str(condition.get("policyId", ""))
+                        condition["policyName"] = policy_map.get(pid, f"Policy {pid}")
+
         scope = f" for policy {policy_id}" if policy_id else ""
         return self._handle_list_response(
             result,
@@ -271,7 +283,31 @@ class ListAlertConditionsHandler(ToolHandlerStrategy):
         condition_id = condition.get("id", "Unknown")
         enabled = condition.get("enabled", "Unknown")
         policy_name = condition.get("policyName", "Unknown")
-        return f"- **{name}**\n  ID: {condition_id}\n  Policy: {policy_name}\n  Enabled: {enabled}\n\n"
+        description = condition.get("description")
+
+        nrql = condition.get("nrql", {})
+        query = nrql.get("query", "") if isinstance(nrql, dict) else ""
+
+        terms = condition.get("terms", [])
+
+        lines = [f"- **{name}**", f"  ID: {condition_id}", f"  Policy: {policy_name}", f"  Enabled: {enabled}"]
+
+        if description:
+            lines.append(f"  Description: {description}")
+
+        if query:
+            lines.append(f"  NRQL: `{query}`")
+
+        for term in terms:
+            priority = term.get("priority", "").capitalize()
+            operator = term.get("operator", "").lower()
+            threshold = term.get("threshold")
+            duration = term.get("thresholdDuration")
+            if threshold is not None:
+                lines.append(f"  {priority}: {operator} {threshold} for {duration}s")
+
+        lines.append("")
+        return "\n".join(lines) + "\n"
 
 
 class ListNotificationDestinationsHandler(ToolHandlerStrategy):
