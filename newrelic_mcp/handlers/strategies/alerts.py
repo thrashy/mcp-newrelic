@@ -310,6 +310,107 @@ class ListAlertConditionsHandler(ToolHandlerStrategy):
         return "\n".join(lines) + "\n"
 
 
+class CreateMutingRuleHandler(ToolHandlerStrategy):
+    """Handler for creating muting rules"""
+
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+        name = arguments["name"]
+        description = arguments.get("description")
+        enabled = arguments.get("enabled", True)
+        condition_operator = arguments.get("condition_operator", "AND")
+        conditions = arguments.get("conditions", [])
+        schedule = arguments.get("schedule")
+
+        result = self._unwrap(
+            await self.client.alerts.create_muting_rule(
+                account_id, name, description, enabled, condition_operator, conditions, schedule
+            ),
+            f"creating muting rule '{name}'",
+        )
+
+        rule_id = result.get("id", "Unknown")
+        schedule_info = result.get("schedule", {})
+        schedule_str = ""
+        if schedule_info:
+            repeat = schedule_info.get("repeat", "")
+            tz = schedule_info.get("timeZone", "")
+            start = schedule_info.get("startTime", "")
+            end = schedule_info.get("endTime", "")
+            schedule_str = f"\nSchedule: {repeat} {start} - {end} ({tz})"
+
+        return self._create_success_response(
+            f"Muting rule '{name}' created successfully!\n"
+            f"Rule ID: {rule_id}\nEnabled: {enabled}{schedule_str}"
+        )
+
+
+class ListMutingRulesHandler(ToolHandlerStrategy):
+    """Handler for listing muting rules"""
+
+    async def handle(self, _arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+        result = await self.client.alerts.get_muting_rules(account_id)
+        return self._handle_list_response(
+            result,
+            error_context="listing muting rules",
+            empty_message="No muting rules found.",
+            item_noun="muting rules",
+            format_item=self._format_rule,
+        )
+
+    @staticmethod
+    def _format_rule(rule: dict[str, Any]) -> str:
+        name = rule.get("name", "Unknown")
+        rule_id = rule.get("id", "Unknown")
+        enabled = rule.get("enabled", "Unknown")
+        description = rule.get("description")
+
+        condition = rule.get("condition", {})
+        cond_operator = condition.get("operator", "AND")
+        sub_conditions = condition.get("conditions", [])
+
+        schedule = rule.get("schedule", {})
+
+        lines = [f"- **{name}**", f"  ID: {rule_id}", f"  Enabled: {enabled}"]
+
+        if description:
+            lines.append(f"  Description: {description}")
+
+        if sub_conditions:
+            cond_parts = []
+            for c in sub_conditions:
+                attr = c.get("attribute", "")
+                op = c.get("operator", "")
+                vals = c.get("values", [])
+                cond_parts.append(f"{attr} {op} {vals}")
+            lines.append(f"  Conditions ({cond_operator}): {'; '.join(cond_parts)}")
+
+        if schedule:
+            repeat = schedule.get("repeat", "ONE_TIME")
+            tz = schedule.get("timeZone", "")
+            start = schedule.get("startTime", "")
+            end = schedule.get("endTime", "")
+            days = schedule.get("weeklyRepeatDays", [])
+            sched_str = f"{repeat} {start} - {end} ({tz})"
+            if days:
+                sched_str += f" [{', '.join(days)}]"
+            lines.append(f"  Schedule: {sched_str}")
+
+        lines.append("")
+        return "\n".join(lines) + "\n"
+
+
+class DeleteMutingRuleHandler(ToolHandlerStrategy):
+    """Handler for deleting muting rules"""
+
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+        rule_id = arguments["rule_id"]
+        self._unwrap(
+            await self.client.alerts.delete_muting_rule(account_id, rule_id),
+            f"deleting muting rule '{rule_id}'",
+        )
+        return self._create_success_response(f"Muting rule '{rule_id}' deleted successfully.")
+
+
 class ListNotificationDestinationsHandler(ToolHandlerStrategy):
     """Handler for listing notification destinations"""
 

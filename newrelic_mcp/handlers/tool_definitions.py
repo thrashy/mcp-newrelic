@@ -617,6 +617,90 @@ def get_alert_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="create_muting_rule",
+            description=(
+                "Create a muting rule to suppress alert notifications during scheduled windows. "
+                "Use conditions to match specific policies, condition names, or entity attributes. "
+                "Use schedule for recurring windows (DAILY, WEEKLY). "
+                "Condition attributes: policyId, policyName, conditionId, conditionName, entity.name, entity.type."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name of the muting rule"},
+                    "description": {"type": "string", "description": "Description of the muting rule (optional)"},
+                    "enabled": {"type": "boolean", "description": "Whether the rule is enabled (default: true)", "default": True},
+                    "condition_operator": {
+                        "type": "string",
+                        "description": "Logical operator for combining conditions (AND, OR)",
+                        "default": "AND",
+                        "enum": ["AND", "OR"],
+                    },
+                    "conditions": {
+                        "type": "array",
+                        "description": "Conditions that define which alerts to mute",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "attribute": {
+                                    "type": "string",
+                                    "description": "Alert attribute (policyId, policyName, conditionId, conditionName, entity.name, entity.type)",
+                                },
+                                "operator": {
+                                    "type": "string",
+                                    "description": "Comparison operator",
+                                    "enum": ["EQUALS", "NOT_EQUALS", "IN", "NOT_IN", "CONTAINS", "DOES_NOT_CONTAIN", "ENDS_WITH", "NOT_ENDS_WITH", "STARTS_WITH", "NOT_STARTS_WITH", "IS_BLANK", "IS_NOT_BLANK", "ANY"],
+                                },
+                                "values": {
+                                    "type": "array",
+                                    "description": "Values to match against",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": ["attribute", "operator", "values"],
+                        },
+                    },
+                    "schedule": {
+                        "type": "object",
+                        "description": "Schedule for recurring muting (optional). startTime/endTime format: ISO 8601 (e.g. 2026-04-01T03:00:00)",
+                        "properties": {
+                            "startTime": {"type": "string", "description": "Start time (ISO 8601)"},
+                            "endTime": {"type": "string", "description": "End time (ISO 8601)"},
+                            "timeZone": {"type": "string", "description": "Time zone (e.g. America/New_York)"},
+                            "repeat": {
+                                "type": "string",
+                                "description": "Recurrence (DAILY, WEEKLY, MONTHLY)",
+                                "enum": ["DAILY", "WEEKLY", "MONTHLY"],
+                            },
+                            "endRepeat": {"type": "string", "description": "When to stop repeating (ISO 8601, optional)"},
+                            "weeklyRepeatDays": {
+                                "type": "array",
+                                "description": "Days for WEEKLY repeat",
+                                "items": {"type": "string", "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]},
+                            },
+                        },
+                    },
+                },
+                "required": ["name", "conditions"],
+            },
+        ),
+        Tool(
+            name="list_muting_rules",
+            description="List all muting rules in the account with their conditions and schedules",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="delete_muting_rule",
+            description="Delete a muting rule by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "rule_id": {"type": "string", "description": "ID of the muting rule to delete"},
+                },
+                "required": ["rule_id"],
+            },
+        ),
+        Tool(
             name="list_alert_policies",
             description="List all alert policies in the account",
             inputSchema={"type": "object", "properties": {}},

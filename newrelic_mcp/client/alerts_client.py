@@ -824,6 +824,153 @@ class AlertsClient:
         except API_ERRORS as e:
             return handle_api_error("delete notification destination", e)
 
+    async def create_muting_rule(
+        self,
+        account_id: str,
+        name: str,
+        description: str | None = None,
+        enabled: bool = True,
+        condition_operator: str = "AND",
+        conditions: list[dict[str, Any]] | None = None,
+        schedule: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | ApiError:
+        """Create a muting rule to suppress alert notifications"""
+        mutation = """
+        mutation($accountId: Int!, $rule: AlertsMutingRuleInput!) {
+          alertsMutingRuleCreate(accountId: $accountId, rule: $rule) {
+            id
+            name
+            description
+            enabled
+            condition {
+              operator
+              conditions {
+                attribute
+                operator
+                values
+              }
+            }
+            schedule {
+              startTime
+              endTime
+              timeZone
+              repeat
+              endRepeat
+              weeklyRepeatDays
+            }
+          }
+        }
+        """
+
+        rule_input: dict[str, Any] = {
+            "name": name,
+            "enabled": enabled,
+            "condition": {
+                "operator": condition_operator,
+                "conditions": conditions or [],
+            },
+        }
+
+        if description:
+            rule_input["description"] = description
+        if schedule:
+            rule_input["schedule"] = schedule
+
+        try:
+            result = await self._base.execute_graphql(
+                mutation, {"accountId": int(account_id), "rule": rule_input}
+            )
+
+            rule_result = self._base._extract_mutation_result(
+                result, "alertsMutingRuleCreate", error_message="Failed to create muting rule"
+            )
+            if isinstance(rule_result, ApiError):
+                return rule_result
+
+            return format_create_response(
+                rule_result,
+                rule_id="id",
+                name="name",
+                enabled="enabled",
+                schedule="schedule",
+            )
+
+        except API_ERRORS as e:
+            return handle_api_error("create muting rule", e)
+
+    async def get_muting_rules(self, account_id: str) -> PaginatedResult | ApiError:
+        """Get all muting rules for the account"""
+        query = """
+        query($accountId: Int!) {
+          actor {
+            account(id: $accountId) {
+              alerts {
+                mutingRules {
+                  id
+                  name
+                  description
+                  enabled
+                  condition {
+                    operator
+                    conditions {
+                      attribute
+                      operator
+                      values
+                    }
+                  }
+                  schedule {
+                    startTime
+                    endTime
+                    timeZone
+                    repeat
+                    endRepeat
+                    weeklyRepeatDays
+                  }
+                  createdAt
+                  updatedAt
+                }
+              }
+            }
+          }
+        }
+        """
+
+        try:
+            result = await self._base.execute_graphql(query, {"accountId": int(account_id)})
+            data = extract_nested_data(result, ["data", "actor", "account", "alerts"])
+            rules = data.get("mutingRules", [])
+            return PaginatedResult(items=rules, total_count=len(rules))
+        except API_ERRORS as e:
+            return handle_api_error("get muting rules", e)
+
+    async def delete_muting_rule(self, account_id: str, rule_id: str) -> dict[str, Any] | ApiError:
+        """Delete a muting rule"""
+        mutation = """
+        mutation($accountId: Int!, $id: ID!) {
+          alertsMutingRuleDelete(accountId: $accountId, id: $id) {
+            id
+          }
+        }
+        """
+
+        try:
+            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "id": rule_id})
+
+            delete_result = self._base._extract_mutation_result(
+                result, "alertsMutingRuleDelete", error_message="Failed to delete muting rule"
+            )
+            if isinstance(delete_result, ApiError):
+                return delete_result
+
+            return {
+                "success": True,
+                "id": delete_result.get("id"),
+                "message": f"Muting rule '{rule_id}' deleted successfully",
+            }
+
+        except API_ERRORS as e:
+            return handle_api_error("delete muting rule", e)
+
     async def delete_workflow(
         self, account_id: str, workflow_id: str, delete_channels: bool = True
     ) -> dict[str, Any] | ApiError:
