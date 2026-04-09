@@ -62,11 +62,40 @@ pip install -e .
 # Configure your credentials (see Configuration section below)
 ```
 
-## Configuration
+## Setup
 
-The server supports flexible configuration with clear precedence (highest to lowest):
+### Getting Your Credentials
 
-### 1. Command Line Arguments (Highest Priority)
+1. **API Key**: Go to [New Relic API Keys](https://one.newrelic.com/api-keys) → Create User API Key
+2. **Account ID**: Found in your New Relic URL: `https://one.newrelic.com/accounts/{ACCOUNT_ID}/...`
+3. **Region**: Use "EU" if your account is on `one.eu.newrelic.com`, otherwise "US"
+
+### MCP Client Integration
+
+Add the server to your MCP client config. **You do not need to start the server manually** — your MCP client launches it automatically.
+
+```json
+{
+  "mcpServers": {
+    "newrelic": {
+      "command": "uv",
+      "args": ["run", "python", "/path/to/mcp-newrelic/server.py"],
+      "env": {
+        "NEW_RELIC_API_KEY": "your-api-key",
+        "NEW_RELIC_ACCOUNT_ID": "your-account-id"
+      }
+    }
+  }
+}
+```
+
+Where this config lives depends on your client (e.g., `~/.claude.json` for Claude Code, `claude_desktop_config.json` for Claude Desktop, `.cursor/mcp.json` for Cursor, etc.). Replace `/path/to/mcp-newrelic/server.py` with the actual path to your clone.
+
+### Advanced Configuration
+
+If you need to run the server manually (e.g., for development or debugging), it supports flexible configuration with clear precedence (highest to lowest):
+
+#### 1. Command Line Arguments (Highest Priority)
 ```bash
 uv run python server.py \
   --api-key "NRAK-your-api-key" \
@@ -74,7 +103,7 @@ uv run python server.py \
   --region "US"
 ```
 
-### 2. JSON Configuration File
+#### 2. JSON Configuration File
 ```bash
 # Copy and edit the example config
 cp newrelic-config.json.example config/newrelic-config.json
@@ -93,54 +122,13 @@ Example `newrelic-config.json`:
 }
 ```
 
-### 3. Environment Variables (Lowest Priority)
+#### 3. Environment Variables (Lowest Priority)
 ```bash
 export NEW_RELIC_API_KEY="NRAK-your-api-key"
 export NEW_RELIC_ACCOUNT_ID="your-account-id"
 export NEW_RELIC_REGION="US"  # US or EU
 export NEW_RELIC_TIMEOUT="30"
 ```
-
-### Getting Your Credentials
-1. **API Key**: Go to [New Relic API Keys](https://one.newrelic.com/api-keys) → Create User API Key
-2. **Account ID**: Found in your New Relic URL: `https://one.newrelic.com/accounts/{ACCOUNT_ID}/...`
-3. **Region**: Use "EU" if your account is on `one.eu.newrelic.com`, otherwise "US"
-
-## Usage
-
-### Start the Server
-```bash
-# Method 1: Environment variables
-export NEW_RELIC_API_KEY="your-key"
-export NEW_RELIC_ACCOUNT_ID="your-id"
-uv run python server.py
-
-# Method 2: Configuration file
-uv run python server.py --config config/newrelic-config.json
-
-# Method 3: Command line arguments
-uv run python server.py --api-key YOUR_KEY --account-id YOUR_ID
-
-# View all options
-uv run python server.py --help
-```
-
-### MCP Client Integration
-Configure your MCP client to connect to the server. Example for Claude Desktop:
-
-```json
-{
-  "mcpServers": {
-    "newrelic": {
-      "command": "uv",
-      "args": ["run", "python", "/path/to/mcp-newrelic/server.py"],
-      "env": {
-        "NEW_RELIC_API_KEY": "your-api-key",
-        "NEW_RELIC_ACCOUNT_ID": "your-account-id"
-      }
-    }
-  }
-}
 ```
 
 ## Available Tools
