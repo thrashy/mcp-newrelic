@@ -96,9 +96,11 @@ class BaseNewRelicClient:
             },
         }
 
-        logger.debug("Executing NRQL query: %s", query)
+        if self.config.payload_logging_enabled:
+            logger.debug("Executing NRQL query: %s", query)
         result = await self._execute_http_request(graphql_query)
-        logger.debug("Query result: %s", result)
+        if self.config.payload_logging_enabled:
+            logger.debug("Query result: %s", result)
         return result
 
     @staticmethod
@@ -112,7 +114,7 @@ class BaseNewRelicClient:
         try:
             # Normalize padding — handles both padded and unpadded input
             padded = guid + "=" * (-len(guid) % 4)
-            decoded = base64.b64decode(padded).decode("utf-8")
+            decoded = base64.b64decode(padded, validate=True).decode("utf-8")
         except Exception as e:
             raise ValueError(f"Invalid entity GUID — not valid base64: {e}") from e
 

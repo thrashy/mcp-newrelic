@@ -39,6 +39,9 @@ Environment Variables:
   NEW_RELIC_ACCOUNT_ID  New Relic account ID
   NEW_RELIC_REGION      New Relic region (US or EU, default: US)
   NEW_RELIC_TIMEOUT     HTTP timeout in seconds (default: 30)
+  NEW_RELIC_MCP_ENABLE_WRITES       Enable write tools (default: false)
+  NEW_RELIC_MCP_ENABLE_DESTRUCTIVE  Enable destructive tools (default: false)
+  NEW_RELIC_MCP_ALLOW_ACCOUNT_OVERRIDE  Allow per-tool account_id override (default: false)
 
 Example Usage:
   # With command line arguments
@@ -60,6 +63,35 @@ Example Usage:
     parser.add_argument("--region", choices=["US", "EU"], default=None, help="New Relic region (default: US)")
     parser.add_argument("--timeout", type=int, default=None, help="HTTP timeout in seconds (default: 30)")
     parser.add_argument("--config", help="Path to JSON configuration file")
+    parser.add_argument(
+        "--enable-writes",
+        action="store_true",
+        default=None,
+        help="Allow MCP tools that create or modify New Relic resources (default: disabled)",
+    )
+    parser.add_argument(
+        "--enable-destructive",
+        action="store_true",
+        default=None,
+        help="Allow destructive tools such as delete, replace, muting, and disabling alerts (default: disabled)",
+    )
+    parser.add_argument(
+        "--allow-account-override",
+        action="store_true",
+        default=None,
+        help="Allow tool arguments to override the configured New Relic account ID (default: disabled)",
+    )
+    parser.add_argument(
+        "--log-payloads",
+        action="store_true",
+        default=None,
+        help="Allow DEBUG logs to include NRQL queries and API results (default: disabled)",
+    )
+    parser.add_argument(
+        "--allowed-tools",
+        help="Comma-separated MCP tool allowlist. If set, all other tools are blocked.",
+    )
+    parser.add_argument("--disabled-tools", help="Comma-separated MCP tool denylist")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     return parser.parse_args()
@@ -86,7 +118,13 @@ def load_config(args: argparse.Namespace) -> NewRelicConfig:
         logger.error("Provide credentials via --api-key/--account-id, config file, or environment variables")
         raise ValueError("Invalid New Relic configuration")
 
-    logger.info(f"Configuration loaded - Region: {config.effective_region}, Account: {config.account_id}")
+    logger.info(
+        "Configuration loaded - Region: %s, Account: %s, Writes: %s, Destructive: %s",
+        config.effective_region,
+        config.account_id,
+        config.writes_enabled,
+        config.destructive_enabled,
+    )
     return config
 
 

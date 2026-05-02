@@ -34,4 +34,4 @@ def extract_workflow_data(result: dict[str, Any]) -> dict[str, Any]:
 
 def escape_nrql_string(value: str) -> str:
     """Escape a string value for safe embedding in a NRQL query"""
-    return value.replace("\\", "\\\\").replace("'", "\\'")
+    return value.replace("\\", "\\\\").replace("'", "\\'").replace("`", "\\`")

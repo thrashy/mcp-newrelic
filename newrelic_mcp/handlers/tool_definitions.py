@@ -609,8 +609,8 @@ def get_alert_tools() -> list[Tool]:
                     "workflow_id": {"type": "string", "description": "ID of the workflow to delete"},
                     "delete_channels": {
                         "type": "boolean",
-                        "description": "Also delete associated notification channels (default: true)",
-                        "default": True,
+                        "description": "Also delete associated notification channels (default: false)",
+                        "default": False,
                     },
                 },
                 "required": ["workflow_id"],

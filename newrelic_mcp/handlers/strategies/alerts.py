@@ -239,7 +239,7 @@ class DeleteWorkflowHandler(ToolHandlerStrategy):
 
     async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         workflow_id = arguments["workflow_id"]
-        delete_channels = arguments.get("delete_channels", True)
+        delete_channels = arguments.get("delete_channels", False)
         self._unwrap(
             await self.client.alerts.delete_workflow(account_id, workflow_id, delete_channels),
             f"deleting workflow '{workflow_id}'",

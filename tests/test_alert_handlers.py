@@ -254,11 +254,11 @@ class TestDeleteWorkflowHandler:
         with pytest.raises(ToolError, match="not found"):
             await handler.handle({"workflow_id": "wf1"}, "1234567")
 
-    async def test_default_delete_channels(self, mock_client, config):
+    async def test_default_preserves_channels(self, mock_client, config):
         mock_client.alerts.delete_workflow.return_value = {"success": True, "id": "wf1"}
         handler = DeleteWorkflowHandler(mock_client, config)
         await handler.handle({"workflow_id": "wf1"}, "1234567")
-        mock_client.alerts.delete_workflow.assert_called_once_with("1234567", "wf1", True)
+        mock_client.alerts.delete_workflow.assert_called_once_with("1234567", "wf1", False)
 
 
 class TestListAlertConditionsSearchFilters:

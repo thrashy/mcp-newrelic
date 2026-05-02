@@ -14,6 +14,12 @@ class TestFromEnv:
         monkeypatch.setenv("NEW_RELIC_ACCOUNT_ID", "1234567")
         monkeypatch.setenv("NEW_RELIC_REGION", "EU")
         monkeypatch.setenv("NEW_RELIC_TIMEOUT", "60")
+        monkeypatch.setenv("NEW_RELIC_MCP_ENABLE_WRITES", "true")
+        monkeypatch.setenv("NEW_RELIC_MCP_ENABLE_DESTRUCTIVE", "false")
+        monkeypatch.setenv("NEW_RELIC_MCP_ALLOW_ACCOUNT_OVERRIDE", "yes")
+        monkeypatch.setenv("NEW_RELIC_MCP_LOG_PAYLOADS", "0")
+        monkeypatch.setenv("NEW_RELIC_MCP_ALLOWED_TOOLS", "query_nrql,list_alert_policies")
+        monkeypatch.setenv("NEW_RELIC_MCP_DISABLED_TOOLS", "delete_dashboard")
 
         cfg = NewRelicConfig.from_env()
 
@@ -21,9 +27,26 @@ class TestFromEnv:
         assert cfg.account_id == "1234567"
         assert cfg.region == "EU"
         assert cfg.timeout == 60
+        assert cfg.writes_enabled is True
+        assert cfg.destructive_enabled is False
+        assert cfg.account_override_enabled is True
+        assert cfg.payload_logging_enabled is False
+        assert cfg.allowed_tools == {"query_nrql", "list_alert_policies"}
+        assert cfg.disabled_tools == {"delete_dashboard"}
 
     def test_missing_env_vars_produce_none(self, monkeypatch):
-        for var in ("NEW_RELIC_API_KEY", "NEW_RELIC_ACCOUNT_ID", "NEW_RELIC_REGION", "NEW_RELIC_TIMEOUT"):
+        for var in (
+            "NEW_RELIC_API_KEY",
+            "NEW_RELIC_ACCOUNT_ID",
+            "NEW_RELIC_REGION",
+            "NEW_RELIC_TIMEOUT",
+            "NEW_RELIC_MCP_ENABLE_WRITES",
+            "NEW_RELIC_MCP_ENABLE_DESTRUCTIVE",
+            "NEW_RELIC_MCP_ALLOW_ACCOUNT_OVERRIDE",
+            "NEW_RELIC_MCP_LOG_PAYLOADS",
+            "NEW_RELIC_MCP_ALLOWED_TOOLS",
+            "NEW_RELIC_MCP_DISABLED_TOOLS",
+        ):
             monkeypatch.delenv(var, raising=False)
 
         cfg = NewRelicConfig.from_env()
@@ -32,6 +55,9 @@ class TestFromEnv:
         assert cfg.account_id is None
         assert cfg.region is None
         assert cfg.timeout is None
+        assert cfg.writes_enabled is False
+        assert cfg.destructive_enabled is False
+        assert cfg.account_override_enabled is False
 
     def test_effective_region_defaults_to_us(self, monkeypatch):
         monkeypatch.delenv("NEW_RELIC_REGION", raising=False)
@@ -46,7 +72,17 @@ class TestFromEnv:
 
 class TestFromFile:
     def test_loads_from_valid_json(self):
-        data = {"api_key": "NRAK-file", "account_id": "9999999", "region": "EU", "timeout": 45}
+        data = {
+            "api_key": "NRAK-file",
+            "account_id": "9999999",
+            "region": "EU",
+            "timeout": 45,
+            "enable_writes": True,
+            "enable_destructive": False,
+            "allow_account_override": True,
+            "allowed_tools": ["query_nrql"],
+            "disabled_tools": "delete_dashboard,delete_workflow",
+        }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(data, f)
             path = f.name
@@ -58,6 +94,11 @@ class TestFromFile:
         assert cfg.account_id == "9999999"
         assert cfg.region == "EU"
         assert cfg.timeout == 45
+        assert cfg.writes_enabled is True
+        assert cfg.destructive_enabled is False
+        assert cfg.account_override_enabled is True
+        assert cfg.allowed_tools == {"query_nrql"}
+        assert cfg.disabled_tools == {"delete_dashboard", "delete_workflow"}
 
     def test_missing_file_returns_empty_config(self):
         cfg = NewRelicConfig.from_file("/nonexistent/path.json")
@@ -157,6 +198,17 @@ class TestMergeWith:
 
         merged = base.merge_with(other)
         assert merged.timeout == 0
+
+    def test_false_boolean_override_is_preserved(self):
+        base = NewRelicConfig()
+        base.enable_writes = True
+
+        other = NewRelicConfig()
+        other.enable_writes = False
+
+        merged = base.merge_with(other)
+        assert merged.enable_writes is False
+        assert merged.writes_enabled is False
 
 
 class TestIsValid:

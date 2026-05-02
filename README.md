@@ -82,7 +82,8 @@ Add the server to your MCP client config. **You do not need to start the server 
       "args": ["run", "python", "/path/to/mcp-newrelic/server.py"],
       "env": {
         "NEW_RELIC_API_KEY": "your-api-key",
-        "NEW_RELIC_ACCOUNT_ID": "your-account-id"
+        "NEW_RELIC_ACCOUNT_ID": "your-account-id",
+        "NEW_RELIC_MCP_ENABLE_WRITES": "false"
       }
     }
   }
@@ -118,7 +119,13 @@ Example `newrelic-config.json`:
   "api_key": "NRAK-your-api-key",
   "account_id": "your-account-id",
   "region": "US",
-  "timeout": 30
+  "timeout": 30,
+  "enable_writes": false,
+  "enable_destructive": false,
+  "allow_account_override": false,
+  "log_payloads": false,
+  "allowed_tools": null,
+  "disabled_tools": []
 }
 ```
 
@@ -128,8 +135,20 @@ export NEW_RELIC_API_KEY="NRAK-your-api-key"
 export NEW_RELIC_ACCOUNT_ID="your-account-id"
 export NEW_RELIC_REGION="US"  # US or EU
 export NEW_RELIC_TIMEOUT="30"
+export NEW_RELIC_MCP_ENABLE_WRITES="false"
+export NEW_RELIC_MCP_ENABLE_DESTRUCTIVE="false"
+export NEW_RELIC_MCP_ALLOW_ACCOUNT_OVERRIDE="false"
 ```
-```
+
+### Safety Controls
+
+The server is read-only by default. Tools that create, update, or delete New Relic resources are blocked unless `NEW_RELIC_MCP_ENABLE_WRITES=true` or `--enable-writes` is set.
+
+Destructive tools remain blocked unless `NEW_RELIC_MCP_ENABLE_DESTRUCTIVE=true` or `--enable-destructive` is also set. This covers delete operations, tag replacement/removal, muting rules, and alert/widget updates.
+
+By default, tool calls cannot target a different account than `NEW_RELIC_ACCOUNT_ID`, and GUID-like arguments must decode to that same account. Set `NEW_RELIC_MCP_ALLOW_ACCOUNT_OVERRIDE=true` only for intentional multi-account usage.
+
+For tighter deployments, use `NEW_RELIC_MCP_ALLOWED_TOOLS` or `NEW_RELIC_MCP_DISABLED_TOOLS` as comma-separated tool lists. Full NRQL query/result DEBUG logging is disabled unless `NEW_RELIC_MCP_LOG_PAYLOADS=true`.
 
 ## Available Tools
 

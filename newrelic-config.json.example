@@ -2,5 +2,11 @@
   "api_key": "your_newrelic_user_api_key_here",
   "account_id": "your_account_id_here",
   "region": "US",
-  "timeout": 30
+  "timeout": 30,
+  "enable_writes": false,
+  "enable_destructive": false,
+  "allow_account_override": false,
+  "log_payloads": false,
+  "allowed_tools": null,
+  "disabled_tools": []
 }

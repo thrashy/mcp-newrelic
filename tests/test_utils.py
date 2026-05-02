@@ -12,6 +12,7 @@ from newrelic_mcp.utils.error_handling import (
     handle_api_error,
     handle_graphql_notification_errors,
 )
+from newrelic_mcp.utils.graphql_helpers import escape_nrql_string
 from newrelic_mcp.utils.response_formatters import format_create_response
 
 
@@ -56,6 +57,11 @@ class TestFormatResourceError:
     def test_formats_error(self):
         result = format_resource_error(ApiError("no access"), "Dashboards")
         assert result == "# Dashboards\n\nError: no access"
+
+
+class TestEscapeNrqlString:
+    def test_escapes_quotes_backslashes_and_backticks(self):
+        assert escape_nrql_string("a'b\\c`d") == "a\\'b\\\\c\\`d"
 
 
 class TestFormatCreateResponse:
