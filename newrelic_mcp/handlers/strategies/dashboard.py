@@ -81,6 +81,7 @@ class AddWidgetHandler(ToolHandlerStrategy):
         widget_query = arguments["widget_query"]
         widget_type = arguments.get("widget_type", "line")
         raw_configuration = arguments.get("raw_configuration")
+        layout = arguments.get("layout")
 
         # Create widget configuration
         widget_config = {
@@ -88,6 +89,9 @@ class AddWidgetHandler(ToolHandlerStrategy):
             "configuration": build_widget_configuration(widget_type, account_id, widget_query),
             "visualization": {"id": f"viz.{widget_type}"},
         }
+
+        if layout is not None:
+            widget_config["layout"] = layout
 
         if raw_configuration is not None:
             if "nrqlQueries" not in raw_configuration:
@@ -198,12 +202,16 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
         widget_query = arguments.get("widget_query")
         widget_type = arguments.get("widget_type", "line")
         raw_configuration = arguments.get("raw_configuration")
+        layout = arguments.get("layout")
 
         # Build widget update configuration
         widget_config: dict[str, Any] = {}
 
         if widget_title:
             widget_config["title"] = widget_title
+
+        if layout is not None:
+            widget_config["layout"] = layout
 
         if widget_query:
             widget_config["configuration"] = build_widget_configuration(widget_type, account_id, widget_query)

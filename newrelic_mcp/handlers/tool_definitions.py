@@ -285,7 +285,12 @@ Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for p
   "legend": {"enabled": false}
 }
 ```
-Note: logarithmic scale is not supported by New Relic for line/area charts.""",
+Note: logarithmic scale is not supported by New Relic for line/area charts.
+
+**Placement (`layout`):** dashboards use a 12-column grid (column is 1-based; height 1 ≈ one billboard row, charts are usually 3).
+Without `layout`, New Relic auto-places the widget full-size at the bottom — fine for one-offs, wrong for designed
+dashboards. Compact KPI billboard: `{"column": 1, "row": 1, "width": 2, "height": 2}`; chart in a 3-across row:
+`{"column": 5, "row": 4, "width": 4, "height": 3}`.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -310,6 +315,20 @@ Note: logarithmic scale is not supported by New Relic for line/area charts.""",
                             "Overrides the typed configuration when provided."
                         ),
                         "additionalProperties": True,
+                    },
+                    "layout": {
+                        "type": "object",
+                        "description": (
+                            "Widget placement on the dashboard's 12-column grid. "
+                            "Omit to let New Relic auto-place (full-size, bottom of page)."
+                        ),
+                        "properties": {
+                            "column": {"type": "integer", "minimum": 1, "maximum": 12},
+                            "row": {"type": "integer", "minimum": 1},
+                            "width": {"type": "integer", "minimum": 1, "maximum": 12},
+                            "height": {"type": "integer", "minimum": 1},
+                        },
+                        "required": ["column", "row", "width", "height"],
                     },
                 },
                 "required": ["dashboard_guid", "widget_title", "widget_query"],
@@ -400,6 +419,20 @@ Note: logarithmic scale is not supported by New Relic for line/area charts.""",
                             "Overrides the typed configuration when provided."
                         ),
                         "additionalProperties": True,
+                    },
+                    "layout": {
+                        "type": "object",
+                        "description": (
+                            "New widget placement on the dashboard's 12-column grid. "
+                            "Omit to keep the widget's current position and size."
+                        ),
+                        "properties": {
+                            "column": {"type": "integer", "minimum": 1, "maximum": 12},
+                            "row": {"type": "integer", "minimum": 1},
+                            "width": {"type": "integer", "minimum": 1, "maximum": 12},
+                            "height": {"type": "integer", "minimum": 1},
+                        },
+                        "required": ["column", "row", "width", "height"],
                     },
                 },
                 "required": ["page_guid", "widget_id"],
