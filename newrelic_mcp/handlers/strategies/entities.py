@@ -1,5 +1,6 @@
 """Entity search, tagging, service level, and synthetic monitor handlers"""
 
+import json
 from typing import Any
 
 from mcp.types import TextContent
@@ -272,6 +273,64 @@ class ListServiceLevelsHandler(ToolHandlerStrategy):
         if sli_tags.get("nr.sli.objectiveTarget"):
             parts.append(f"  Target: {sli_tags['nr.sli.objectiveTarget']}%")
         return "\n".join(parts) + "\n\n"
+
+
+def _indicator_from_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    return {k: arguments[k] for k in ("name", "description", "events", "objectives") if arguments.get(k) is not None}
+
+
+class GetServiceLevelHandler(ToolHandlerStrategy):
+    """Handler for fetching full SLI definitions for an entity"""
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        guid = self._require_guid(arguments)
+        indicators = self._unwrap(
+            await self.client.entities.get_service_level(guid),
+            "getting service level",
+        )
+        if not indicators:
+            return self._create_success_response(f"No service level indicators found for entity {guid}.")
+        return self._create_success_response(
+            f"Found {len(indicators)} service level indicator(s):\n\n```json\n{json.dumps(indicators, indent=2)}\n```"
+        )
+
+
+class CreateServiceLevelHandler(ToolHandlerStrategy):
+    """Handler for creating a service level indicator"""
+
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+        entity_guid = self._require_guid(arguments, key="entity_guid")
+        indicator = _indicator_from_arguments(arguments)
+        result = self._unwrap(
+            await self.client.entities.create_service_level(entity_guid, account_id, indicator),
+            "creating service level",
+        )
+        return self._create_success_response(f"Service level created:\n\n```json\n{json.dumps(result, indent=2)}\n```")
+
+
+class UpdateServiceLevelHandler(ToolHandlerStrategy):
+    """Handler for updating a service level indicator"""
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        guid = self._require_guid(arguments)
+        indicator = _indicator_from_arguments(arguments)
+        result = self._unwrap(
+            await self.client.entities.update_service_level(guid, indicator),
+            "updating service level",
+        )
+        return self._create_success_response(f"Service level updated:\n\n```json\n{json.dumps(result, indent=2)}\n```")
+
+
+class DeleteServiceLevelHandler(ToolHandlerStrategy):
+    """Handler for deleting a service level indicator"""
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        guid = self._require_guid(arguments)
+        result = self._unwrap(
+            await self.client.entities.delete_service_level(guid),
+            "deleting service level",
+        )
+        return self._create_success_response(f"Service level deleted: {result.get('name', guid)}")
 
 
 class ListSyntheticMonitorsHandler(ToolHandlerStrategy):

@@ -1,17 +1,23 @@
 """Tests for entity tool handler strategies."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from newrelic_mcp.handlers.strategies.entities import (
     AddTagsHandler,
+    CreateServiceLevelHandler,
+    DeleteServiceLevelHandler,
     DeleteTagsHandler,
     DeleteTagValuesHandler,
     EntitySearchHandler,
     GetEntityTagsHandler,
+    GetServiceLevelHandler,
     GetSyntheticResultsHandler,
     ListServiceLevelsHandler,
     ListSyntheticMonitorsHandler,
     ReplaceTagsHandler,
+    UpdateServiceLevelHandler,
 )
 from newrelic_mcp.types import ApiError, ToolError
 
@@ -176,6 +182,68 @@ class TestListServiceLevelsHandler:
         result = await handler.handle({}, "1234567")
 
         assert "Error" in result[0].text
+
+
+class TestGetServiceLevelHandler:
+    async def test_returns_definitions(self, mock_client, config):
+        mock_client.entities.get_service_level = AsyncMock(
+            return_value=[{"id": "1", "name": "Availability", "events": {}}]
+        )
+        handler = GetServiceLevelHandler(mock_client, config)
+        result = await handler.handle({"guid": "MTIzNDU2Nzg5MA=="}, "1234567")
+        assert "Availability" in result[0].text
+
+    async def test_no_indicators(self, mock_client, config):
+        mock_client.entities.get_service_level = AsyncMock(return_value=[])
+        handler = GetServiceLevelHandler(mock_client, config)
+        result = await handler.handle({"guid": "MTIzNDU2Nzg5MA=="}, "1234567")
+        assert "No service level indicators" in result[0].text
+
+
+class TestCreateServiceLevelHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.entities.create_service_level = AsyncMock(return_value={"id": "1", "name": "My SLI"})
+        handler = CreateServiceLevelHandler(mock_client, config)
+        result = await handler.handle(
+            {
+                "entity_guid": "MTIzNDU2Nzg5MA==",
+                "name": "My SLI",
+                "events": {"validEvents": {"from": "Metric"}},
+                "objectives": [],
+            },
+            "1234567",
+        )
+        assert "My SLI" in result[0].text
+
+    async def test_error(self, mock_client, config):
+        mock_client.entities.create_service_level = AsyncMock(return_value=ApiError("boom"))
+        handler = CreateServiceLevelHandler(mock_client, config)
+        with pytest.raises(ToolError):
+            await handler.handle(
+                {"entity_guid": "MTIzNDU2Nzg5MA==", "name": "x", "events": {}, "objectives": []}, "1234567"
+            )
+
+
+class TestUpdateServiceLevelHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.entities.update_service_level = AsyncMock(return_value={"id": "1", "name": "My SLI"})
+        handler = UpdateServiceLevelHandler(mock_client, config)
+        result = await handler.handle({"guid": "MTIzNDU2Nzg5MA==", "description": "new"}, "1234567")
+        assert "My SLI" in result[0].text
+
+
+class TestDeleteServiceLevelHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.entities.delete_service_level = AsyncMock(return_value={"id": "1", "name": "My SLI"})
+        handler = DeleteServiceLevelHandler(mock_client, config)
+        result = await handler.handle({"guid": "MTIzNDU2Nzg5MA=="}, "1234567")
+        assert "deleted" in result[0].text.lower()
+
+    async def test_permission_error(self, mock_client, config):
+        mock_client.entities.delete_service_level = AsyncMock(return_value=ApiError("Access denied"))
+        handler = DeleteServiceLevelHandler(mock_client, config)
+        with pytest.raises(ToolError):
+            await handler.handle({"guid": "MTIzNDU2Nzg5MA=="}, "1234567")
 
 
 class TestListSyntheticMonitorsHandler:

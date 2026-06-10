@@ -293,6 +293,125 @@ class EntitiesClient:
         except API_ERRORS as e:
             return handle_api_error("list service levels", e)
 
+    _SLI_INDICATOR_FIELDS = """
+                  id
+                  guid
+                  name
+                  description
+                  createdAt
+                  updatedAt
+                  objectives { target timeWindow { rolling { count unit } } }
+                  events {
+                    validEvents { from where select { attribute function threshold } }
+                    goodEvents { from where select { attribute function threshold } }
+                    badEvents { from where select { attribute function threshold } }
+                  }
+    """
+
+    async def _execute_sli_mutation(
+        self, mutation: str, variables: dict[str, Any], mutation_key: str, operation: str
+    ) -> dict[str, Any] | ApiError:
+        """Execute a service level mutation and return the mutation payload."""
+        try:
+            result = await self._base.execute_graphql(mutation, variables)
+            data: dict[str, Any] | None = (result.get("data") or {}).get(mutation_key)
+            if not data:
+                return ApiError(f"Failed to {operation}: empty response")
+            return data
+        except API_ERRORS as e:
+            return handle_api_error(operation, e)
+
+    async def get_service_level(self, guid: str) -> list[dict[str, Any]] | ApiError:
+        """Get full SLI definitions (events, objectives) for an entity.
+
+        Accepts either the GUID of the entity the SLIs are attached to, or the
+        GUID of a SERVICE_LEVEL entity itself (resolved via its
+        nr.associatedEntityGuid tag).
+        """
+        query = f"""
+        query($guid: EntityGuid!) {{
+          actor {{
+            entity(guid: $guid) {{
+              guid
+              name
+              tags {{ key values }}
+              serviceLevel {{
+                indicators {{
+                  {self._SLI_INDICATOR_FIELDS}
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+        try:
+            result = await self._base.execute_graphql(query, {"guid": guid})
+            entity = result.get("data", {}).get("actor", {}).get("entity") or {}
+            indicators = (entity.get("serviceLevel") or {}).get("indicators") or []
+            if not indicators:
+                tags = {t["key"]: t["values"] for t in entity.get("tags", [])}
+                associated = tags.get("nr.associatedEntityGuid")
+                if associated and associated[0] != guid:
+                    return await self.get_service_level(associated[0])
+            return indicators
+        except API_ERRORS as e:
+            return handle_api_error("get service level", e)
+
+    async def create_service_level(
+        self, entity_guid: str, account_id: str, indicator: dict[str, Any]
+    ) -> dict[str, Any] | ApiError:
+        """Create a service level indicator on an entity.
+
+        The NerdGraph create input requires accountId inside events; it is
+        injected here so callers pass the same indicator shape as for updates.
+        """
+        mutation = f"""
+        mutation($entityGuid: EntityGuid!, $indicator: ServiceLevelIndicatorCreateInput!) {{
+          serviceLevelCreate(entityGuid: $entityGuid, indicator: $indicator) {{
+            {self._SLI_INDICATOR_FIELDS}
+          }}
+        }}
+        """
+        indicator = {**indicator, "events": {**indicator["events"], "accountId": int(account_id)}}
+        return await self._execute_sli_mutation(
+            mutation,
+            {"entityGuid": entity_guid, "indicator": indicator},
+            "serviceLevelCreate",
+            "create service level",
+        )
+
+    async def update_service_level(self, guid: str, indicator: dict[str, Any]) -> dict[str, Any] | ApiError:
+        """Update a service level indicator (events, objectives, name, description).
+
+        The NerdGraph update input rejects accountId inside events; it is
+        stripped here so callers pass the same indicator shape as for creates.
+        """
+        mutation = f"""
+        mutation($guid: EntityGuid!, $indicator: ServiceLevelIndicatorUpdateInput!) {{
+          serviceLevelUpdate(guid: $guid, indicator: $indicator) {{
+            {self._SLI_INDICATOR_FIELDS}
+          }}
+        }}
+        """
+        if "events" in indicator:
+            events = {k: v for k, v in indicator["events"].items() if k != "accountId"}
+            indicator = {**indicator, "events": events}
+        return await self._execute_sli_mutation(
+            mutation, {"guid": guid, "indicator": indicator}, "serviceLevelUpdate", "update service level"
+        )
+
+    async def delete_service_level(self, guid: str) -> dict[str, Any] | ApiError:
+        """Delete a service level indicator by its SERVICE_LEVEL entity GUID.
+
+        Requires the events-to-metrics delete capability on the account.
+        """
+        mutation = """
+        mutation($guid: EntityGuid!) {
+          serviceLevelDelete(guid: $guid) { id name }
+        }
+        """
+        return await self._execute_sli_mutation(mutation, {"guid": guid}, "serviceLevelDelete", "delete service level")
+
     async def list_synthetic_monitors(self, account_id: str) -> list[dict[str, Any]] | ApiError:
         """List synthetic monitors via entity search with cursor-based pagination"""
         query = """

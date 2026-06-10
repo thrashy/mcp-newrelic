@@ -6,6 +6,66 @@ Centralized definition of all available tools and their schemas.
 
 from mcp.types import Tool
 
+_SERVICE_LEVEL_EVENT_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "from": {"type": "string", "description": "Source event type (e.g. Metric, Transaction, Span)"},
+        "where": {"type": "string", "description": "NRQL WHERE clause filtering the events (optional)"},
+        "select": {
+            "type": "object",
+            "description": (
+                "Aggregation function (optional, defaults to COUNT). For OTEL distribution metrics "
+                "use GET_FIELD (sums actual request counts) or GET_CDF_COUNT with threshold "
+                "(counts requests at or below the threshold); COUNT counts data points, not requests."
+            ),
+            "properties": {
+                "attribute": {"type": "string", "description": "Attribute to aggregate"},
+                "function": {"type": "string", "enum": ["COUNT", "SUM", "GET_FIELD", "GET_CDF_COUNT"]},
+                "threshold": {"type": "number", "description": "Threshold for GET_CDF_COUNT"},
+            },
+            "required": ["attribute", "function"],
+        },
+    },
+    "required": ["from"],
+}
+
+_SERVICE_LEVEL_EVENTS_SCHEMA = {
+    "type": "object",
+    "description": "SLI event queries. Provide validEvents plus either goodEvents or badEvents.",
+    "properties": {
+        "validEvents": _SERVICE_LEVEL_EVENT_QUERY_SCHEMA,
+        "goodEvents": _SERVICE_LEVEL_EVENT_QUERY_SCHEMA,
+        "badEvents": _SERVICE_LEVEL_EVENT_QUERY_SCHEMA,
+    },
+    "required": ["validEvents"],
+}
+
+_SERVICE_LEVEL_OBJECTIVES_SCHEMA = {
+    "type": "array",
+    "description": "SLO objectives, e.g. [{target: 99.9, timeWindow: {rolling: {count: 28, unit: DAY}}}]",
+    "items": {
+        "type": "object",
+        "properties": {
+            "target": {"type": "number", "description": "Target percentage (e.g. 99.9)"},
+            "timeWindow": {
+                "type": "object",
+                "properties": {
+                    "rolling": {
+                        "type": "object",
+                        "properties": {
+                            "count": {"type": "integer", "description": "Window length (1, 7, or 28)"},
+                            "unit": {"type": "string", "enum": ["DAY"]},
+                        },
+                        "required": ["count", "unit"],
+                    },
+                },
+                "required": ["rolling"],
+            },
+        },
+        "required": ["target", "timeWindow"],
+    },
+}
+
 
 def get_monitoring_tools() -> list[Tool]:
     """Get monitoring and performance tools"""
@@ -972,6 +1032,77 @@ def get_entity_tools() -> list[Tool]:
                 "properties": {
                     "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
+            },
+        ),
+        Tool(
+            name="get_service_level",
+            description=(
+                "Get the full definitions (valid/good/bad event queries, SLI functions, "
+                "objectives, time windows) of the Service Level Indicators attached to an entity. "
+                "Accepts the GUID of the instrumented entity or of a SERVICE_LEVEL entity itself."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {"type": "string", "description": "Entity GUID"},
+                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                },
+                "required": ["guid"],
+            },
+        ),
+        Tool(
+            name="create_service_level",
+            description=(
+                "Create a Service Level Indicator on an entity. "
+                "For SLIs over OTEL distribution metrics (FROM Metric), never use function COUNT "
+                "(it counts pre-aggregated data points, not requests): use GET_FIELD for "
+                "availability and GET_CDF_COUNT with a threshold for latency."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entity_guid": {"type": "string", "description": "GUID of the entity to attach the SLI to"},
+                    "name": {"type": "string", "description": "SLI name"},
+                    "description": {"type": "string", "description": "SLI description (optional)"},
+                    "events": _SERVICE_LEVEL_EVENTS_SCHEMA,
+                    "objectives": _SERVICE_LEVEL_OBJECTIVES_SCHEMA,
+                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                },
+                "required": ["entity_guid", "name", "events", "objectives"],
+            },
+        ),
+        Tool(
+            name="update_service_level",
+            description=(
+                "Update a Service Level Indicator (name, description, event queries, objectives) "
+                "by its SERVICE_LEVEL entity GUID. Note: changing the SLI function on an existing "
+                "SLI may not reset the engine's computation pipeline; if numbers stay wrong after "
+                "an update, delete and recreate the SLI."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {"type": "string", "description": "SERVICE_LEVEL entity GUID"},
+                    "name": {"type": "string", "description": "New SLI name (optional)"},
+                    "description": {"type": "string", "description": "New SLI description (optional)"},
+                    "events": _SERVICE_LEVEL_EVENTS_SCHEMA,
+                    "objectives": _SERVICE_LEVEL_OBJECTIVES_SCHEMA,
+                },
+                "required": ["guid"],
+            },
+        ),
+        Tool(
+            name="delete_service_level",
+            description=(
+                "Delete a Service Level Indicator by its SERVICE_LEVEL entity GUID. "
+                "Requires the events-to-metrics delete capability on the account."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {"type": "string", "description": "SERVICE_LEVEL entity GUID"},
+                },
+                "required": ["guid"],
             },
         ),
         Tool(

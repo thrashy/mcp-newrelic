@@ -42,16 +42,20 @@ from .strategies.dashboard import (
 )
 from .strategies.entities import (
     AddTagsHandler,
+    CreateServiceLevelHandler,
     DecodeEntityGuidHandler,
+    DeleteServiceLevelHandler,
     DeleteTagsHandler,
     DeleteTagValuesHandler,
     EntitySearchHandler,
     GetEntityHandler,
     GetEntityTagsHandler,
+    GetServiceLevelHandler,
     GetSyntheticResultsHandler,
     ListServiceLevelsHandler,
     ListSyntheticMonitorsHandler,
     ReplaceTagsHandler,
+    UpdateServiceLevelHandler,
 )
 from .strategies.monitoring import (
     AlertViolationsHandler,
@@ -116,6 +120,10 @@ class ToolHandlers:
             "delete_tags_from_entity": DeleteTagsHandler(client, config),
             "delete_tag_values": DeleteTagValuesHandler(client, config),
             "list_service_levels": ListServiceLevelsHandler(client, config),
+            "get_service_level": GetServiceLevelHandler(client, config),
+            "create_service_level": CreateServiceLevelHandler(client, config),
+            "update_service_level": UpdateServiceLevelHandler(client, config),
+            "delete_service_level": DeleteServiceLevelHandler(client, config),
             "list_synthetic_monitors": ListSyntheticMonitorsHandler(client, config),
             "get_synthetic_results": GetSyntheticResultsHandler(client, config),
         }

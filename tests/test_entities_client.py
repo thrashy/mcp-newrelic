@@ -178,6 +178,94 @@ class TestListServiceLevels:
         assert isinstance(result, ApiError)
 
 
+def _sli_entity_response(indicators: list, tags: list | None = None) -> dict:
+    return {
+        "data": {
+            "actor": {
+                "entity": {
+                    "guid": "g1",
+                    "name": "svc",
+                    "tags": tags or [],
+                    "serviceLevel": {"indicators": indicators},
+                }
+            }
+        }
+    }
+
+
+class TestGetServiceLevel:
+    async def test_returns_indicators(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = _sli_entity_response([{"id": "1", "name": "Availability"}])
+        indicators = await client.get_service_level("g1")
+        assert len(indicators) == 1
+        assert indicators[0]["name"] == "Availability"
+
+    async def test_resolves_associated_entity(self):
+        client = _make_client()
+        client._base.execute_graphql.side_effect = [
+            _sli_entity_response([], tags=[{"key": "nr.associatedEntityGuid", "values": ["g2"]}]),
+            _sli_entity_response([{"id": "1", "name": "Latency"}]),
+        ]
+        indicators = await client.get_service_level("sli-guid")
+        assert len(indicators) == 1
+        assert client._base.execute_graphql.call_count == 2
+
+    async def test_exception_returns_error(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("fail"))
+        result = await client.get_service_level("g1")
+        assert isinstance(result, ApiError)
+
+
+class TestCreateServiceLevel:
+    async def test_injects_account_id_into_events(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"serviceLevelCreate": {"id": "1", "name": "SLI"}}}
+        indicator = {"name": "SLI", "events": {"validEvents": {"from": "Metric"}}, "objectives": []}
+        result = await client.create_service_level("g1", "1234567", indicator)
+        assert result["id"] == "1"
+        sent = client._base.execute_graphql.call_args.args[1]["indicator"]
+        assert sent["events"]["accountId"] == 1234567
+
+    async def test_empty_response_returns_error(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"serviceLevelCreate": None}}
+        result = await client.create_service_level("g1", "1234567", {"name": "SLI", "events": {}})
+        assert isinstance(result, ApiError)
+
+
+class TestUpdateServiceLevel:
+    async def test_strips_account_id_from_events(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"serviceLevelUpdate": {"id": "1", "name": "SLI"}}}
+        indicator = {"events": {"accountId": 1234567, "validEvents": {"from": "Metric"}}}
+        result = await client.update_service_level("g1", indicator)
+        assert result["id"] == "1"
+        sent = client._base.execute_graphql.call_args.args[1]["indicator"]
+        assert "accountId" not in sent["events"]
+
+    async def test_exception_returns_error(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("fail"))
+        result = await client.update_service_level("g1", {"name": "SLI"})
+        assert isinstance(result, ApiError)
+
+
+class TestDeleteServiceLevel:
+    async def test_success(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"serviceLevelDelete": {"id": "1", "name": "SLI"}}}
+        result = await client.delete_service_level("g1")
+        assert result["name"] == "SLI"
+
+    async def test_permission_error_returns_error(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("Access denied"))
+        result = await client.delete_service_level("g1")
+        assert isinstance(result, ApiError)
+
+
 class TestListSyntheticMonitors:
     async def test_returns_monitors(self):
         client = _make_client()
