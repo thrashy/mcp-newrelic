@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+from newrelic_mcp.client.base_client import BaseNewRelicClient
 from newrelic_mcp.client.entities_client import EntitiesClient
 from newrelic_mcp.types import ApiError, PaginatedResult
 
@@ -11,6 +12,9 @@ def _make_client() -> EntitiesClient:
     base.execute_graphql = AsyncMock()
     base.query_nrql = AsyncMock()
     base.paginate_graphql = AsyncMock()
+    base.extract_mutation_result = BaseNewRelicClient.extract_mutation_result.__get__(base)
+    base.execute_mutation = BaseNewRelicClient.execute_mutation.__get__(base)
+    base.entity_search_paginated = BaseNewRelicClient.entity_search_paginated.__get__(base)
     return EntitiesClient(base)
 
 

@@ -1,7 +1,7 @@
 """Base strategy interface for tool handlers"""
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 from mcp.types import TextContent
@@ -16,6 +16,8 @@ _T = TypeVar("_T")
 
 class ToolHandlerStrategy(ABC):
     """Abstract base class for tool handlers"""
+
+    requires_account_id: bool = True
 
     def __init__(self, client: NewRelicClient, config: NewRelicConfig):
         self.client = client
@@ -74,3 +76,25 @@ class ToolHandlerStrategy(ABC):
         for item in items:
             text += format_item(item)
         return self._create_success_response(text)
+
+
+def make_delete_handler(
+    noun: str,
+    arg_key: str,
+    get_delete_method: Callable[[NewRelicClient], Callable[[str, str], Awaitable[dict[str, Any] | ApiError]]],
+    *,
+    error_noun: str,
+) -> type[ToolHandlerStrategy]:
+    """Build a handler class for delete tools of the shape: read id arg → delete → success message."""
+
+    class _DeleteHandler(ToolHandlerStrategy):
+        async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+            item_id = arguments[arg_key]
+            self._unwrap(
+                await get_delete_method(self.client)(account_id, item_id),
+                f"deleting {error_noun} '{item_id}'",
+            )
+            return self._create_success_response(f"{noun} '{item_id}' deleted successfully.")
+
+    _DeleteHandler.__name__ = f"Delete{noun.title().replace(' ', '')}Handler"
+    return _DeleteHandler

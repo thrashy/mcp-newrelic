@@ -112,24 +112,10 @@ class AddWidgetHandler(ToolHandlerStrategy):
         )
 
 
-class SearchDashboardsHandler(ToolHandlerStrategy):
-    """Handler for dashboard search"""
-
-    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
-        search = arguments.get("search")
-        guid = arguments.get("guid")
-
-        result = self._unwrap(
-            await self.client.dashboards.get_dashboards(account_id, search=search, guid=guid, limit=200),
-            "searching dashboards",
-        )
-
-        dashboard_text = format_dashboard_list(result.items, search, guid, limit_display=25)
-        return self._create_success_response(dashboard_text)
-
-
 class GetWidgetsHandler(ToolHandlerStrategy):
     """Handler for getting dashboard widgets"""
+
+    requires_account_id = False
 
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         dashboard_guid = self._require_guid(arguments, "dashboard_guid")
@@ -244,6 +230,8 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
 class DeleteWidgetHandler(ToolHandlerStrategy):
     """Handler for deleting widgets"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         page_guid = self._require_guid(arguments, "page_guid")
         widget_id = arguments["widget_id"]
@@ -258,6 +246,8 @@ class DeleteWidgetHandler(ToolHandlerStrategy):
 
 class DeleteDashboardHandler(ToolHandlerStrategy):
     """Handler for deleting dashboards"""
+
+    requires_account_id = False
 
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         dashboard_guid = self._require_guid(arguments, "dashboard_guid")

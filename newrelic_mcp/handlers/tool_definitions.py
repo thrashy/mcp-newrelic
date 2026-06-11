@@ -4,7 +4,116 @@ Tool definitions for New Relic MCP Server.
 Centralized definition of all available tools and their schemas.
 """
 
+from typing import Any
+
 from mcp.types import Tool
+
+_ACCOUNT_ID_PROPERTY: dict[str, Any] = {"type": "string", "description": "Account ID (optional)"}
+
+_TAGS_ARRAY_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "key": {"type": "string"},
+            "value": {"type": "string"},
+        },
+        "required": ["key", "value"],
+    },
+}
+
+_WIDGET_LAYOUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "column": {"type": "integer", "minimum": 1, "maximum": 12},
+        "row": {"type": "integer", "minimum": 1},
+        "width": {"type": "integer", "minimum": 1, "maximum": 12},
+        "height": {"type": "integer", "minimum": 1},
+    },
+    "required": ["column", "row", "width", "height"],
+}
+
+_RAW_CONFIGURATION_PROPERTY: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Advanced chart display configuration sent as rawConfiguration to NerdGraph. "
+        "Must include 'nrqlQueries' array with accountIds (array, not scalar). "
+        "Supports: yAxisLeft ({min, max, zero}), yAxisRight ({zero, series:[{name}]}), "
+        "legend ({enabled}), facet ({showOtherSeries}), platformOptions ({ignoreTimeRange}), "
+        "thresholds ({isLabelVisible}), chartStyles ({lineInterpolation: linear/step/smooth}), "
+        "markers ({displayedTypes: {deployments, relatedDeployments, criticalViolations, warningViolations}}). "
+        "Note: logarithmic scale is NOT supported. "
+        "Overrides the typed configuration when provided."
+    ),
+    "additionalProperties": True,
+}
+
+_RAW_CONFIG_DOCS = """Use the optional `raw_configuration` parameter to control advanced chart display settings. When provided,
+it is sent as `rawConfiguration` to NerdGraph and takes precedence over the typed configuration.
+The `raw_configuration` object should include `nrqlQueries` plus any display options.
+
+**IMPORTANT: `nrqlQueries` uses `accountIds` (array) not `accountId` (scalar):**
+`"nrqlQueries": [{"accountIds": [123456], "query": "SELECT ..."}]`
+This is auto-populated from widget_query if omitted.
+
+**Fixed Y-Axis Range (left axis):**
+`{"yAxisLeft": {"min": 0, "max": 500, "zero": false}}`
+
+**Dual Y-Axis (second axis on right):**
+IMPORTANT: dual y-axis requires the COMPLETE rawConfiguration (not just yAxisRight).
+NR automatically appends an aggregation suffix to series names: percentile() → " (99%)", average() → no suffix.
+The alias in the query should NOT include the suffix — NR adds it. Use the rendered name in series[].name.
+Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for percentile():
+```json
+{
+  "nrqlQueries": [{"accountIds": [123456], "query": "SELECT count(*) AS 'Left', percentile(duration, 99) AS 'My Series' FROM ... TIMESERIES"}],
+  "chartStyles": {"lineInterpolation": "linear"},
+  "facet": {"showOtherSeries": false},
+  "legend": {"enabled": true},
+  "markers": {"displayedTypes": {"criticalViolations": false, "deployments": true, "relatedDeployments": true, "warningViolations": false}},
+  "platformOptions": {"ignoreTimeRange": false},
+  "thresholds": {"isLabelVisible": true},
+  "yAxisLeft": {"zero": true},
+  "yAxisRight": {"zero": true, "series": [{"name": "My Series (99%)"}]}
+}
+```
+
+**Hide Legend:**
+`{"legend": {"enabled": false}}`
+
+**Facet - show/hide Other series:**
+`{"facet": {"showOtherSeries": true}}`
+
+**Ignore dashboard time picker:**
+`{"platformOptions": {"ignoreTimeRange": true}}`
+
+**Threshold label visibility (shows/hides threshold labels on chart):**
+`{"thresholds": {"isLabelVisible": true}}`
+
+**Chart line style:**
+`{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
+
+**Deployment markers:**
+`{"markers": {"displayedTypes": {"deployments": true, "relatedDeployments": true, "criticalViolations": false, "warningViolations": false}}}`
+
+**Combined example (fixed range + no legend):**
+```json
+{
+  "nrqlQueries": [{"accountIds": [123456], "query": "SELECT count(*) FROM Log TIMESERIES"}],
+  "yAxisLeft": {"min": 0, "max": 1000, "zero": true},
+  "legend": {"enabled": false}
+}
+```
+Note: logarithmic scale is not supported by New Relic for line/area charts."""
+
+
+def _hours_property(default: int) -> dict[str, Any]:
+    return {
+        "type": "integer",
+        "description": f"Number of hours to look back (default: {default})",
+        "default": default,
+    }
+
 
 _SERVICE_LEVEL_EVENT_QUERY_SCHEMA = {
     "type": "object",
@@ -102,11 +211,7 @@ def get_monitoring_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "app_name": {"type": "string", "description": "Name of the application"},
-                    "hours": {
-                        "type": "integer",
-                        "description": "Number of hours to look back (default: 1)",
-                        "default": 1,
-                    },
+                    "hours": _hours_property(1),
                 },
                 "required": ["app_name"],
             },
@@ -118,11 +223,7 @@ def get_monitoring_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "app_name": {"type": "string", "description": "Name of the application"},
-                    "hours": {
-                        "type": "integer",
-                        "description": "Number of hours to look back (default: 1)",
-                        "default": 1,
-                    },
+                    "hours": _hours_property(1),
                 },
                 "required": ["app_name"],
             },
@@ -132,13 +233,7 @@ def get_monitoring_tools() -> list[Tool]:
             description="Get recent incidents from New Relic",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "hours": {
-                        "type": "integer",
-                        "description": "Number of hours to look back (default: 24)",
-                        "default": 24,
-                    }
-                },
+                "properties": {"hours": _hours_property(24)},
             },
         ),
         Tool(
@@ -146,13 +241,7 @@ def get_monitoring_tools() -> list[Tool]:
             description="Get infrastructure hosts and their metrics",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "hours": {
-                        "type": "integer",
-                        "description": "Number of hours to look back (default: 1)",
-                        "default": 1,
-                    }
-                },
+                "properties": {"hours": _hours_property(1)},
             },
         ),
         Tool(
@@ -160,13 +249,7 @@ def get_monitoring_tools() -> list[Tool]:
             description="Get recent alert violations and incidents",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "hours": {
-                        "type": "integer",
-                        "description": "Number of hours to look back (default: 24)",
-                        "default": 24,
-                    }
-                },
+                "properties": {"hours": _hours_property(24)},
             },
         ),
         Tool(
@@ -227,70 +310,14 @@ def get_dashboard_tools() -> list[Tool]:
         ),
         Tool(
             name="add_widget_to_dashboard",
-            description="""Add a widget to an existing dashboard (requires dashboard GUID and widget configuration).
+            description=f"""Add a widget to an existing dashboard (requires dashboard GUID and widget configuration).
 
-Use the optional `raw_configuration` parameter to control advanced chart display settings. When provided,
-it is sent as `rawConfiguration` to NerdGraph and takes precedence over the typed configuration.
-The `raw_configuration` object should include `nrqlQueries` plus any display options.
-
-**IMPORTANT: `nrqlQueries` uses `accountIds` (array) not `accountId` (scalar):**
-`"nrqlQueries": [{"accountIds": [123456], "query": "SELECT ..."}]`
-This is auto-populated from widget_query if omitted.
-
-**Fixed Y-Axis Range (left axis):**
-`{"yAxisLeft": {"min": 0, "max": 500, "zero": false}}`
-
-**Dual Y-Axis (second axis on right):**
-IMPORTANT: dual y-axis requires the COMPLETE rawConfiguration (not just yAxisRight).
-NR automatically appends an aggregation suffix to series names: percentile() → " (99%)", average() → no suffix.
-The alias in the query should NOT include the suffix — NR adds it. Use the rendered name in series[].name.
-Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for percentile():
-```json
-{
-  "nrqlQueries": [{"accountIds": [123456], "query": "SELECT count(*) AS 'Left', percentile(duration, 99) AS 'My Series' FROM ... TIMESERIES"}],
-  "chartStyles": {"lineInterpolation": "linear"},
-  "facet": {"showOtherSeries": false},
-  "legend": {"enabled": true},
-  "markers": {"displayedTypes": {"criticalViolations": false, "deployments": true, "relatedDeployments": true, "warningViolations": false}},
-  "platformOptions": {"ignoreTimeRange": false},
-  "thresholds": {"isLabelVisible": true},
-  "yAxisLeft": {"zero": true},
-  "yAxisRight": {"zero": true, "series": [{"name": "My Series (99%)"}]}
-}
-```
-
-**Hide Legend:**
-`{"legend": {"enabled": false}}`
-
-**Facet - show/hide Other series:**
-`{"facet": {"showOtherSeries": true}}`
-
-**Ignore dashboard time picker:**
-`{"platformOptions": {"ignoreTimeRange": true}}`
-
-**Threshold label visibility (shows/hides threshold labels on chart):**
-`{"thresholds": {"isLabelVisible": true}}`
-
-**Chart line style:**
-`{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
-
-**Deployment markers:**
-`{"markers": {"displayedTypes": {"deployments": true, "relatedDeployments": true, "criticalViolations": false, "warningViolations": false}}}`
-
-**Combined example (fixed range + no legend):**
-```json
-{
-  "nrqlQueries": [{"accountIds": [123456], "query": "SELECT count(*) FROM Log TIMESERIES"}],
-  "yAxisLeft": {"min": 0, "max": 1000, "zero": true},
-  "legend": {"enabled": false}
-}
-```
-Note: logarithmic scale is not supported by New Relic for line/area charts.
+{_RAW_CONFIG_DOCS}
 
 **Placement (`layout`):** dashboards use a 12-column grid (column is 1-based; height 1 ≈ one billboard row, charts are usually 3).
 Without `layout`, New Relic auto-places the widget full-size at the bottom — fine for one-offs, wrong for designed
-dashboards. Compact KPI billboard: `{"column": 1, "row": 1, "width": 2, "height": 2}`; chart in a 3-across row:
-`{"column": 5, "row": 4, "width": 4, "height": 3}`.""",
+dashboards. Compact KPI billboard: `{{"column": 1, "row": 1, "width": 2, "height": 2}}`; chart in a 3-across row:
+`{{"column": 5, "row": 4, "width": 4, "height": 3}}`.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -302,50 +329,16 @@ dashboards. Compact KPI billboard: `{"column": 1, "row": 1, "width": 2, "height"
                         "description": "Type of widget (line, area, bar, pie, table, billboard, etc.)",
                         "default": "line",
                     },
-                    "raw_configuration": {
-                        "type": "object",
-                        "description": (
-                            "Advanced chart display configuration sent as rawConfiguration to NerdGraph. "
-                            "Must include 'nrqlQueries' array with accountIds (array, not scalar). "
-                            "Supports: yAxisLeft ({min, max, zero}), yAxisRight ({zero, series:[{name}]}), "
-                            "legend ({enabled}), facet ({showOtherSeries}), platformOptions ({ignoreTimeRange}), "
-                            "thresholds ({isLabelVisible}), chartStyles ({lineInterpolation: linear/step/smooth}), "
-                            "markers ({displayedTypes: {deployments, relatedDeployments, criticalViolations, warningViolations}}). "
-                            "Note: logarithmic scale is NOT supported. "
-                            "Overrides the typed configuration when provided."
-                        ),
-                        "additionalProperties": True,
-                    },
+                    "raw_configuration": _RAW_CONFIGURATION_PROPERTY,
                     "layout": {
-                        "type": "object",
+                        **_WIDGET_LAYOUT_SCHEMA,
                         "description": (
                             "Widget placement on the dashboard's 12-column grid. "
                             "Omit to let New Relic auto-place (full-size, bottom of page)."
                         ),
-                        "properties": {
-                            "column": {"type": "integer", "minimum": 1, "maximum": 12},
-                            "row": {"type": "integer", "minimum": 1},
-                            "width": {"type": "integer", "minimum": 1, "maximum": 12},
-                            "height": {"type": "integer", "minimum": 1},
-                        },
-                        "required": ["column", "row", "width", "height"],
                     },
                 },
                 "required": ["dashboard_guid", "widget_title", "widget_query"],
-            },
-        ),
-        Tool(
-            name="search_all_dashboards",
-            description="Search through dashboards with local filtering (retrieves max 200 from API, then searches locally). Better for complex searches.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "search": {
-                        "type": "string",
-                        "description": "Search term to filter dashboards by name (case-insensitive)",
-                    },
-                    "guid": {"type": "string", "description": "Specific dashboard GUID to find"},
-                },
             },
         ),
         Tool(
@@ -365,36 +358,11 @@ dashboards. Compact KPI billboard: `{"column": 1, "row": 1, "width": 2, "height"
 
 Use the optional `raw_configuration` parameter to control advanced chart display settings. When provided,
 it is sent as `rawConfiguration` to NerdGraph and takes precedence over the typed configuration.
-The `raw_configuration` object should include `nrqlQueries` plus any display options.
+See the add_widget_to_dashboard description for the full rawConfiguration reference.
 
-**IMPORTANT: `nrqlQueries` uses `accountIds` (array) not `accountId` (scalar):**
-`"nrqlQueries": [{"accountIds": [123456], "query": "SELECT ..."}]`
-This is auto-populated from widget_query if omitted.
-
-**Fixed Y-Axis Range (left axis):**
-`{"yAxisLeft": {"min": 0, "max": 500, "zero": false}}`
-
-**Dual Y-Axis (second axis on right):**
-IMPORTANT: requires the COMPLETE rawConfiguration. NR appends aggregation suffix to series names automatically
-(percentile() → " (99%)", average() → no suffix). Query alias should NOT include the suffix.
-See add_widget_to_dashboard for the full dual y-axis example.
-
-**Hide Legend:**
-`{"legend": {"enabled": false}}`
-
-**Facet - show/hide Other series:**
-`{"facet": {"showOtherSeries": true}}`
-
-**Ignore dashboard time picker:**
-`{"platformOptions": {"ignoreTimeRange": true}}`
-
-**Threshold label visibility:**
-`{"thresholds": {"isLabelVisible": true}}`
-
-**Chart line style:**
-`{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
-
-Note: logarithmic scale is not supported by New Relic for line/area charts.""",
+Update-specific notes:
+- Omit `widget_type` to keep the widget's current visualization.
+- Omit `layout` to keep the widget's current position and size.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -409,32 +377,13 @@ Note: logarithmic scale is not supported by New Relic for line/area charts.""",
                             "Omit to keep the widget's current visualization."
                         ),
                     },
-                    "raw_configuration": {
-                        "type": "object",
-                        "description": (
-                            "Advanced chart display configuration sent as rawConfiguration to NerdGraph. "
-                            "Must include 'nrqlQueries' array with accountIds (array, not scalar). "
-                            "Supports: yAxisLeft ({min, max, zero}), yAxisRight ({zero, series:[{name}]}), "
-                            "legend ({enabled}), facet ({showOtherSeries}), platformOptions ({ignoreTimeRange}), "
-                            "thresholds ({isLabelVisible}), chartStyles ({lineInterpolation: linear/step/smooth}). "
-                            "Note: logarithmic scale is NOT supported. "
-                            "Overrides the typed configuration when provided."
-                        ),
-                        "additionalProperties": True,
-                    },
+                    "raw_configuration": _RAW_CONFIGURATION_PROPERTY,
                     "layout": {
-                        "type": "object",
+                        **_WIDGET_LAYOUT_SCHEMA,
                         "description": (
                             "New widget placement on the dashboard's 12-column grid. "
                             "Omit to keep the widget's current position and size."
                         ),
-                        "properties": {
-                            "column": {"type": "integer", "minimum": 1, "maximum": 12},
-                            "row": {"type": "integer", "minimum": 1},
-                            "width": {"type": "integer", "minimum": 1, "maximum": 12},
-                            "height": {"type": "integer", "minimum": 1},
-                        },
-                        "required": ["column", "row", "width", "height"],
                     },
                 },
                 "required": ["page_guid", "widget_id"],
@@ -896,18 +845,7 @@ def get_entity_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Domain filter: APM, INFRA, SYNTH, BROWSER, MOBILE, EXT",
                     },
-                    "tags": {
-                        "type": "array",
-                        "description": "Tag filters as [{key, value}] pairs",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "key": {"type": "string"},
-                                "value": {"type": "string"},
-                            },
-                            "required": ["key", "value"],
-                        },
-                    },
+                    "tags": {**_TAGS_ARRAY_SCHEMA, "description": "Tag filters as [{key, value}] pairs"},
                     "limit": {
                         "type": "integer",
                         "description": "Maximum entities to return (default 25, max 200)",
@@ -919,7 +857,6 @@ def get_entity_tools() -> list[Tool]:
                         "description": "If true, return only name, GUID, domain, type, and alertSeverity (omit tags and type-specific fields) to reduce response size",
                         "default": False,
                     },
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
             },
         ),
@@ -961,7 +898,6 @@ def get_entity_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
                 "required": ["guid"],
             },
@@ -973,19 +909,7 @@ def get_entity_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
-                    "tags": {
-                        "type": "array",
-                        "description": "Tags to add as [{key, value}] pairs",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "key": {"type": "string"},
-                                "value": {"type": "string"},
-                            },
-                            "required": ["key", "value"],
-                        },
-                    },
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                    "tags": {**_TAGS_ARRAY_SCHEMA, "description": "Tags to add as [{key, value}] pairs"},
                 },
                 "required": ["guid", "tags"],
             },
@@ -998,18 +922,9 @@ def get_entity_tools() -> list[Tool]:
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
                     "tags": {
-                        "type": "array",
+                        **_TAGS_ARRAY_SCHEMA,
                         "description": "Tags to set as [{key, value}] pairs (replaces all existing tags)",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "key": {"type": "string"},
-                                "value": {"type": "string"},
-                            },
-                            "required": ["key", "value"],
-                        },
                     },
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
                 "required": ["guid", "tags"],
             },
@@ -1026,7 +941,6 @@ def get_entity_tools() -> list[Tool]:
                         "description": "Tag keys to delete",
                         "items": {"type": "string"},
                     },
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
                 "required": ["guid", "tag_keys"],
             },
@@ -1039,18 +953,9 @@ def get_entity_tools() -> list[Tool]:
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
                     "tag_values": {
-                        "type": "array",
+                        **_TAGS_ARRAY_SCHEMA,
                         "description": "Tag key-value pairs to delete as [{key, value}]",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "key": {"type": "string"},
-                                "value": {"type": "string"},
-                            },
-                            "required": ["key", "value"],
-                        },
                     },
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
                 "required": ["guid", "tag_values"],
             },
@@ -1065,7 +970,7 @@ def get_entity_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                    "account_id": _ACCOUNT_ID_PROPERTY,
                 },
             },
         ),
@@ -1080,7 +985,6 @@ def get_entity_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
                 },
                 "required": ["guid"],
             },
@@ -1101,7 +1005,7 @@ def get_entity_tools() -> list[Tool]:
                     "description": {"type": "string", "description": "SLI description (optional)"},
                     "events": _SERVICE_LEVEL_EVENTS_SCHEMA,
                     "objectives": _SERVICE_LEVEL_OBJECTIVES_SCHEMA,
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                    "account_id": _ACCOUNT_ID_PROPERTY,
                 },
                 "required": ["entity_guid", "name", "events", "objectives"],
             },
@@ -1150,7 +1054,7 @@ def get_entity_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                    "account_id": _ACCOUNT_ID_PROPERTY,
                 },
             },
         ),
@@ -1170,7 +1074,7 @@ def get_entity_tools() -> list[Tool]:
                         "description": "Hours to look back (default: 24)",
                         "default": 24,
                     },
-                    "account_id": {"type": "string", "description": "Account ID (optional)"},
+                    "account_id": _ACCOUNT_ID_PROPERTY,
                 },
                 "required": ["monitor_guid"],
             },

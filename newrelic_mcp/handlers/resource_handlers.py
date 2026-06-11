@@ -8,6 +8,7 @@ from pydantic import AnyUrl
 from ..client import NewRelicClient
 from ..config import NewRelicConfig
 from ..types import ApiError
+from ..utils.alert_formatters import format_alert_condition, format_alert_policy
 from ..utils.error_handling import format_resource_error
 
 logger = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ class ResourceHandlers:
 
         policies_list = f"# Alert Policies\n\n{result.total_count or len(result.items)} alert policies found:\n\n"
         for policy in result.items:
-            policies_list += self._format_policy_info(policy)
+            policies_list += format_alert_policy(policy)
 
         return policies_list
 
@@ -153,27 +154,8 @@ class ResourceHandlers:
 
         conditions_list = f"# Alert Conditions\n\n{result.total_count or len(result.items)} alert conditions found:\n\n"
         for condition in result.items:
-            name = condition.get("name", "Unknown")
-            condition_id = condition.get("id", "Unknown")
-            policy_id = condition.get("policyId", "Unknown")
-            enabled = condition.get("enabled", False)
-            nrql_query = condition.get("nrql", {}).get("query", "No query")
-            terms = condition.get("terms", [])
-
-            conditions_list += f"## {name}\n"
-            conditions_list += f"- **Condition ID**: {condition_id}\n"
-            conditions_list += f"- **Policy ID**: {policy_id}\n"
-            conditions_list += f"- **Enabled**: {enabled}\n"
-            conditions_list += f"- **NRQL Query**: `{nrql_query}`\n"
-
-            if terms:
-                term = terms[0]
-                threshold = term.get("threshold", "N/A")
-                operator = term.get("operator", "N/A")
-                priority = term.get("priority", "N/A")
-                conditions_list += f"- **Threshold**: {operator} {threshold} ({priority})\n"
-
-            conditions_list += "\n"
+            condition.setdefault("policyName", f"Policy {condition.get('policyId', 'Unknown')}")
+            conditions_list += format_alert_condition(condition)
 
         return conditions_list
 
@@ -191,19 +173,6 @@ class ResourceHandlers:
             workflows_list += self._format_workflow_info(workflow)
 
         return workflows_list
-
-    @staticmethod
-    def _format_policy_info(policy: dict) -> str:
-        name = policy.get("name", "Unknown")
-        policy_id = policy.get("id", "Unknown")
-        incident_pref = policy.get("incidentPreference", "Unknown")
-        created = policy.get("createdAt", "Unknown")
-
-        result = f"## {name}\n"
-        result += f"- **Policy ID**: {policy_id}\n"
-        result += f"- **Incident Preference**: {incident_pref}\n"
-        result += f"- **Created**: {created}\n\n"
-        return result
 
     @staticmethod
     def _format_workflow_info(workflow: dict) -> str:

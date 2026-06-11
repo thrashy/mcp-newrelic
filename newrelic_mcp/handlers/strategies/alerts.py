@@ -5,7 +5,8 @@ from typing import Any
 from mcp.types import TextContent
 
 from ...types import PaginatedResult
-from .base import ToolHandlerStrategy
+from ...utils.alert_formatters import format_alert_condition, format_alert_policy
+from .base import ToolHandlerStrategy, make_delete_handler
 
 
 class CreateAlertPolicyHandler(ToolHandlerStrategy):
@@ -143,27 +144,13 @@ class ListAlertPoliciesHandler(ToolHandlerStrategy):
             error_context="listing alert policies",
             empty_message="No alert policies found.",
             item_noun="alert policies",
-            format_item=self._format_policy,
+            format_item=format_alert_policy,
         )
 
-    @staticmethod
-    def _format_policy(policy: dict[str, Any]) -> str:
-        name = policy.get("name", "Unknown")
-        policy_id = policy.get("id", "Unknown")
-        incident_preference = policy.get("incidentPreference", "Unknown")
-        return f"- **{name}**\n  ID: {policy_id}\n  Incident Preference: {incident_preference}\n\n"
 
-
-class DeleteAlertPolicyHandler(ToolHandlerStrategy):
-    """Handler for deleting alert policies"""
-
-    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
-        policy_id = arguments["policy_id"]
-        self._unwrap(
-            await self.client.alerts.delete_alert_policy(account_id, policy_id),
-            f"deleting alert policy '{policy_id}'",
-        )
-        return self._create_success_response(f"Alert policy '{policy_id}' deleted successfully.")
+DeleteAlertPolicyHandler = make_delete_handler(
+    "Alert policy", "policy_id", lambda c: c.alerts.delete_alert_policy, error_noun="alert policy"
+)
 
 
 class UpdateAlertPolicyHandler(ToolHandlerStrategy):
@@ -183,16 +170,9 @@ class UpdateAlertPolicyHandler(ToolHandlerStrategy):
         return self._create_success_response(f"Alert policy '{updated_name}' updated successfully.")
 
 
-class DeleteNRQLConditionHandler(ToolHandlerStrategy):
-    """Handler for deleting NRQL alert conditions"""
-
-    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
-        condition_id = arguments["condition_id"]
-        self._unwrap(
-            await self.client.alerts.delete_nrql_condition(account_id, condition_id),
-            f"deleting condition '{condition_id}'",
-        )
-        return self._create_success_response(f"Alert condition '{condition_id}' deleted successfully.")
+DeleteNRQLConditionHandler = make_delete_handler(
+    "Alert condition", "condition_id", lambda c: c.alerts.delete_nrql_condition, error_noun="condition"
+)
 
 
 class UpdateNRQLConditionHandler(ToolHandlerStrategy):
@@ -218,16 +198,12 @@ class UpdateNRQLConditionHandler(ToolHandlerStrategy):
         return self._create_success_response(f"Alert condition '{condition_id}' updated successfully.")
 
 
-class DeleteNotificationDestinationHandler(ToolHandlerStrategy):
-    """Handler for deleting notification destinations"""
-
-    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
-        destination_id = arguments["destination_id"]
-        self._unwrap(
-            await self.client.alerts.delete_notification_destination(account_id, destination_id),
-            f"deleting destination '{destination_id}'",
-        )
-        return self._create_success_response(f"Notification destination '{destination_id}' deleted successfully.")
+DeleteNotificationDestinationHandler = make_delete_handler(
+    "Notification destination",
+    "destination_id",
+    lambda c: c.alerts.delete_notification_destination,
+    error_noun="destination",
+)
 
 
 class DeleteWorkflowHandler(ToolHandlerStrategy):
@@ -270,40 +246,8 @@ class ListAlertConditionsHandler(ToolHandlerStrategy):
             error_context="listing alert conditions",
             empty_message=f"No alert conditions found{scope}.",
             item_noun=f"alert conditions{scope}",
-            format_item=self._format_condition,
+            format_item=format_alert_condition,
         )
-
-    @staticmethod
-    def _format_condition(condition: dict[str, Any]) -> str:
-        name = condition.get("name", "Unknown")
-        condition_id = condition.get("id", "Unknown")
-        enabled = condition.get("enabled", "Unknown")
-        policy_name = condition.get("policyName", "Unknown")
-        description = condition.get("description")
-
-        nrql = condition.get("nrql", {})
-        query = nrql.get("query", "") if isinstance(nrql, dict) else ""
-
-        terms = condition.get("terms", [])
-
-        lines = [f"- **{name}**", f"  ID: {condition_id}", f"  Policy: {policy_name}", f"  Enabled: {enabled}"]
-
-        if description:
-            lines.append(f"  Description: {description}")
-
-        if query:
-            lines.append(f"  NRQL: `{query}`")
-
-        for term in terms:
-            priority = term.get("priority", "").capitalize()
-            operator = term.get("operator", "").lower()
-            threshold = term.get("threshold")
-            duration = term.get("thresholdDuration")
-            if threshold is not None:
-                lines.append(f"  {priority}: {operator} {threshold} for {duration}s")
-
-        lines.append("")
-        return "\n".join(lines) + "\n"
 
 
 class CreateMutingRuleHandler(ToolHandlerStrategy):
@@ -394,16 +338,9 @@ class ListMutingRulesHandler(ToolHandlerStrategy):
         return "\n".join(lines) + "\n"
 
 
-class DeleteMutingRuleHandler(ToolHandlerStrategy):
-    """Handler for deleting muting rules"""
-
-    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
-        rule_id = arguments["rule_id"]
-        self._unwrap(
-            await self.client.alerts.delete_muting_rule(account_id, rule_id),
-            f"deleting muting rule '{rule_id}'",
-        )
-        return self._create_success_response(f"Muting rule '{rule_id}' deleted successfully.")
+DeleteMutingRuleHandler = make_delete_handler(
+    "Muting rule", "rule_id", lambda c: c.alerts.delete_muting_rule, error_noun="muting rule"
+)
 
 
 class ListNotificationDestinationsHandler(ToolHandlerStrategy):

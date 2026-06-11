@@ -20,17 +20,16 @@ class NewRelicClient:
     """
 
     def __init__(self, config: NewRelicConfig):
-        self._base = BaseNewRelicClient(config)
-        self.base = self._base
-        self.monitoring = MonitoringClient(self._base)
-        self.alerts = AlertsClient(self._base)
-        self.dashboards = DashboardsClient(self._base)
-        self.entities = EntitiesClient(self._base)
+        self.base = BaseNewRelicClient(config)
+        self.monitoring = MonitoringClient(self.base)
+        self.alerts = AlertsClient(self.base)
+        self.dashboards = DashboardsClient(self.base)
+        self.entities = EntitiesClient(self.base)
 
     async def query_nrql(self, account_id: str, query: str) -> dict[str, Any]:
         """Convenience method for direct NRQL queries."""
-        return await self._base.query_nrql(account_id, query)
+        return await self.base.query_nrql(account_id, query)
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
-        await self._base.aclose()
+        await self.base.aclose()

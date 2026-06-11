@@ -9,7 +9,6 @@ from newrelic_mcp.handlers.strategies.dashboard import (
     DeleteWidgetHandler,
     GetDashboardsHandler,
     GetWidgetsHandler,
-    SearchDashboardsHandler,
     UpdateWidgetHandler,
 )
 from newrelic_mcp.types import ApiError, PaginatedResult, ToolError
@@ -121,23 +120,6 @@ class TestAddWidgetHandler:
             await handler.handle(
                 {"dashboard_guid": "YmFkR3VpZFRlc3Q=", "widget_title": "W", "widget_query": "SELECT 1"}, "1234567"
             )
-
-
-class TestSearchDashboardsHandler:
-    async def test_search_returns_results(self, mock_client, config):
-        mock_client.dashboards.get_dashboards.return_value = PaginatedResult(
-            items=[{"name": "API Dashboard", "guid": "g1", "createdAt": "2026-01-01"}]
-        )
-        handler = SearchDashboardsHandler(mock_client, config)
-        result = await handler.handle({"search": "API"}, "1234567")
-
-        assert "API Dashboard" in result[0].text
-
-    async def test_search_error(self, mock_client, config):
-        mock_client.dashboards.get_dashboards.return_value = ApiError("timeout")
-        handler = SearchDashboardsHandler(mock_client, config)
-        with pytest.raises(ToolError, match="timeout"):
-            await handler.handle({"search": "test"}, "1234567")
 
 
 class TestGetWidgetsHandler:

@@ -11,7 +11,8 @@ def _make_client() -> AlertsClient:
     base = MagicMock()
     base.execute_graphql = AsyncMock()
     base.paginate_graphql = AsyncMock()
-    base._extract_mutation_result = BaseNewRelicClient._extract_mutation_result.__get__(base)
+    base.extract_mutation_result = BaseNewRelicClient.extract_mutation_result.__get__(base)
+    base.execute_mutation = BaseNewRelicClient.execute_mutation.__get__(base)
     return AlertsClient(base)
 
 

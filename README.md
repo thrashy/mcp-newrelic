@@ -144,7 +144,6 @@ export NEW_RELIC_TIMEOUT="30"
 
 ### Dashboard Management
 - **`get_dashboards`**: List and search dashboards with filtering
-- **`search_all_dashboards`**: Advanced dashboard search with local filtering
 - **`get_dashboard_widgets`**: Retrieve all widgets from a dashboard
 - **`create_dashboard`**: Create new dashboards for monitoring
 - **`delete_dashboard`**: Delete a dashboard by GUID
@@ -189,7 +188,7 @@ Access structured data through these MCP resources:
 
 - **`newrelic://applications`**: Complete list of monitored applications
 - **`newrelic://incidents/recent`**: Recent incidents and alert summary
-- **`newrelic://dashboards`**: Dashboard metadata and widgets
+- **`newrelic://dashboards`**: Dashboard metadata (name, GUID, created date, URL)
 - **`newrelic://alerts/policies`**: Alert policies and configurations
 - **`newrelic://alerts/conditions`**: Alert conditions across all policies
 - **`newrelic://alerts/workflows`**: Workflow configurations and notifications

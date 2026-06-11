@@ -35,12 +35,7 @@ class DashboardsClient:
         else:
             search_query = f"accountId = {acct} AND type = 'DASHBOARD'"
 
-        query = """
-        query($searchQuery: String!, $cursor: String) {
-          actor {
-            entitySearch(query: $searchQuery) {
-              results(cursor: $cursor) {
-                entities {
+        entity_fragment = """
                   ... on DashboardEntityOutline {
                     name
                     guid
@@ -48,22 +43,10 @@ class DashboardsClient:
                     createdAt
                     updatedAt
                   }
-                }
-                nextCursor
-              }
-            }
-          }
-        }
         """
 
         try:
-            return await self._base.paginate_graphql(
-                query,
-                {"searchQuery": search_query},
-                ["data", "actor", "entitySearch", "results"],
-                "entities",
-                limit=limit,
-            )
+            return await self._base.entity_search_paginated(search_query, entity_fragment, limit=limit)
         except API_ERRORS as e:
             return handle_api_error("get dashboards", e)
 
@@ -95,22 +78,17 @@ class DashboardsClient:
         }
         """
 
-        try:
-            result = await self._base.execute_graphql(
-                mutation, {"accountId": int(account_id), "dashboard": dashboard_input}
-            )
+        extracted = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "dashboard": dashboard_input},
+            "dashboardCreate",
+            "create dashboard",
+        )
+        if isinstance(extracted, ApiError):
+            return extracted
 
-            extracted = self._base._extract_mutation_result(
-                result, "dashboardCreate", error_message="Dashboard creation failed"
-            )
-            if isinstance(extracted, ApiError):
-                return extracted
-
-            entity_result: dict[str, Any] = extracted.get("entityResult", {})
-            return entity_result
-
-        except API_ERRORS as e:
-            return handle_api_error("create dashboard", e)
+        entity_result: dict[str, Any] = extracted.get("entityResult", {})
+        return entity_result
 
     async def add_widget_to_dashboard(
         self, dashboard_guid: str, widget_config: dict[str, Any]
@@ -134,50 +112,44 @@ class DashboardsClient:
 
         try:
             pages_result = await self._base.execute_graphql(get_pages_query, {"guid": dashboard_guid})
-
-            entity = pages_result.get("data", {}).get("actor", {}).get("entity", {})
-            pages = entity.get("pages", [])
-
-            if not pages:
-                return ApiError("No pages found in dashboard")
-
-            page_guid = pages[0]["guid"]
-            page_name = pages[0].get("name", "Page 1")
-
-            mutation = """
-            mutation($guid: EntityGuid!, $widgets: [DashboardWidgetInput!]!) {
-              dashboardAddWidgetsToPage(guid: $guid, widgets: $widgets) {
-                errors {
-                  description
-                  type
-                }
-              }
-            }
-            """
-
-            result = await self._base.execute_graphql(
-                mutation,
-                {
-                    "guid": page_guid,
-                    "widgets": [widget_config],
-                },
-            )
-
-            add_result = self._base._extract_mutation_result(
-                result, "dashboardAddWidgetsToPage", error_message="Widget addition failed"
-            )
-            if isinstance(add_result, ApiError):
-                return add_result
-
-            return {
-                "success": True,
-                "message": f"Widget added successfully to page '{page_name}' of dashboard",
-                "page_guid": page_guid,
-                "page_name": page_name,
-            }
-
         except API_ERRORS as e:
             return handle_api_error("add widget to dashboard", e)
+
+        entity = pages_result.get("data", {}).get("actor", {}).get("entity", {})
+        pages = entity.get("pages", [])
+
+        if not pages:
+            return ApiError("No pages found in dashboard")
+
+        page_guid = pages[0]["guid"]
+        page_name = pages[0].get("name", "Page 1")
+
+        mutation = """
+        mutation($guid: EntityGuid!, $widgets: [DashboardWidgetInput!]!) {
+          dashboardAddWidgetsToPage(guid: $guid, widgets: $widgets) {
+            errors {
+              description
+              type
+            }
+          }
+        }
+        """
+
+        add_result = await self._base.execute_mutation(
+            mutation,
+            {"guid": page_guid, "widgets": [widget_config]},
+            "dashboardAddWidgetsToPage",
+            "add widget to dashboard",
+        )
+        if isinstance(add_result, ApiError):
+            return add_result
+
+        return {
+            "success": True,
+            "message": f"Widget added successfully to page '{page_name}' of dashboard",
+            "page_guid": page_guid,
+            "page_name": page_name,
+        }
 
     async def get_dashboard_widgets(self, dashboard_guid: str) -> dict[str, Any] | ApiError:
         """Get all widgets from a dashboard with their details"""
@@ -308,19 +280,16 @@ class DashboardsClient:
 
         widget_update_input = {"id": widget_id, **widget_config}
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"guid": page_guid, "widgets": [widget_update_input]})
+        extracted = await self._base.execute_mutation(
+            mutation,
+            {"guid": page_guid, "widgets": [widget_update_input]},
+            "dashboardUpdateWidgetsInPage",
+            "update widget",
+        )
+        if isinstance(extracted, ApiError):
+            return extracted
 
-            extracted = self._base._extract_mutation_result(
-                result, "dashboardUpdateWidgetsInPage", error_message="Widget update failed"
-            )
-            if isinstance(extracted, ApiError):
-                return extracted
-
-            return {"success": True, "message": f"Widget '{widget_id}' updated successfully", "widget_id": widget_id}
-
-        except API_ERRORS as e:
-            return handle_api_error("update widget", e)
+        return {"success": True, "message": f"Widget '{widget_id}' updated successfully", "widget_id": widget_id}
 
     async def delete_widget(self, page_guid: str, widget_id: str) -> dict[str, Any] | ApiError:
         """Delete a widget by updating the page with all widgets except the target."""
@@ -350,76 +319,74 @@ class DashboardsClient:
 
         try:
             result = await self._base.execute_graphql(fetch_query, {"guid": page_guid})
-            entity = result.get("data", {}).get("actor", {}).get("entity", {})
-            if not entity:
-                return ApiError(f"Page '{page_guid}' not found")
-
-            # Find the page containing this widget
-            target_page = None
-            for page in entity.get("pages", []):
-                if page.get("guid") == page_guid:
-                    target_page = page
-                    break
-
-            if not target_page:
-                return ApiError(f"Page with GUID '{page_guid}' not found in dashboard")
-
-            # Filter out the target widget and rebuild the list
-            remaining_widgets = []
-            found = False
-            for w in target_page.get("widgets", []):
-                if str(w.get("id")) == str(widget_id):
-                    found = True
-                    continue
-                widget_input: dict[str, Any] = {
-                    "id": w["id"],
-                    "title": w.get("title", ""),
-                    "visualization": w.get("visualization", {"id": "viz.line"}),
-                    "rawConfiguration": w.get("rawConfiguration", {}),
-                }
-                if w.get("layout"):
-                    widget_input["layout"] = w["layout"]
-                remaining_widgets.append(widget_input)
-
-            if not found:
-                return ApiError(f"Widget '{widget_id}' not found on page '{page_guid}'")
-
-            if not remaining_widgets:
-                return ApiError(
-                    "Cannot delete the last widget on a page. "
-                    "Use delete_dashboard to remove the entire dashboard instead."
-                )
-
-            # dashboardUpdateWidgetsInPage cannot remove widgets — only dashboardUpdatePage
-            # replaces the full widget set, dropping any widget omitted from it.
-            update_mutation = """
-            mutation($guid: EntityGuid!, $page: DashboardUpdatePageInput!) {
-              dashboardUpdatePage(guid: $guid, page: $page) {
-                errors {
-                  description
-                  type
-                }
-              }
-            }
-            """
-            page_input: dict[str, Any] = {
-                "name": target_page.get("name", "Page 1"),
-                "widgets": remaining_widgets,
-            }
-            if target_page.get("description"):
-                page_input["description"] = target_page["description"]
-            update_result = await self._base.execute_graphql(update_mutation, {"guid": page_guid, "page": page_input})
-
-            extracted = self._base._extract_mutation_result(
-                update_result, "dashboardUpdatePage", error_message="Widget deletion failed"
-            )
-            if isinstance(extracted, ApiError):
-                return extracted
-
-            return {"success": True, "message": f"Widget '{widget_id}' deleted successfully", "widget_id": widget_id}
-
         except API_ERRORS as e:
             return handle_api_error("delete widget", e)
+
+        entity = result.get("data", {}).get("actor", {}).get("entity", {})
+        if not entity:
+            return ApiError(f"Page '{page_guid}' not found")
+
+        # Find the page containing this widget
+        target_page = None
+        for page in entity.get("pages", []):
+            if page.get("guid") == page_guid:
+                target_page = page
+                break
+
+        if not target_page:
+            return ApiError(f"Page with GUID '{page_guid}' not found in dashboard")
+
+        # Filter out the target widget and rebuild the list
+        remaining_widgets = []
+        found = False
+        for w in target_page.get("widgets", []):
+            if str(w.get("id")) == str(widget_id):
+                found = True
+                continue
+            widget_input: dict[str, Any] = {
+                "id": w["id"],
+                "title": w.get("title", ""),
+                "visualization": w.get("visualization", {"id": "viz.line"}),
+                "rawConfiguration": w.get("rawConfiguration", {}),
+            }
+            if w.get("layout"):
+                widget_input["layout"] = w["layout"]
+            remaining_widgets.append(widget_input)
+
+        if not found:
+            return ApiError(f"Widget '{widget_id}' not found on page '{page_guid}'")
+
+        if not remaining_widgets:
+            return ApiError(
+                "Cannot delete the last widget on a page. Use delete_dashboard to remove the entire dashboard instead."
+            )
+
+        # dashboardUpdateWidgetsInPage cannot remove widgets — only dashboardUpdatePage
+        # replaces the full widget set, dropping any widget omitted from it.
+        update_mutation = """
+        mutation($guid: EntityGuid!, $page: DashboardUpdatePageInput!) {
+          dashboardUpdatePage(guid: $guid, page: $page) {
+            errors {
+              description
+              type
+            }
+          }
+        }
+        """
+        page_input: dict[str, Any] = {
+            "name": target_page.get("name", "Page 1"),
+            "widgets": remaining_widgets,
+        }
+        if target_page.get("description"):
+            page_input["description"] = target_page["description"]
+
+        extracted = await self._base.execute_mutation(
+            update_mutation, {"guid": page_guid, "page": page_input}, "dashboardUpdatePage", "delete widget"
+        )
+        if isinstance(extracted, ApiError):
+            return extracted
+
+        return {"success": True, "message": f"Widget '{widget_id}' deleted successfully", "widget_id": widget_id}
 
     async def delete_dashboard(self, dashboard_guid: str) -> dict[str, Any] | ApiError:
         """Delete a dashboard by GUID"""
@@ -435,21 +402,14 @@ class DashboardsClient:
         }
         """
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"guid": dashboard_guid})
+        delete_result = await self._base.execute_mutation(
+            mutation, {"guid": dashboard_guid}, "dashboardDelete", "delete dashboard"
+        )
+        if isinstance(delete_result, ApiError):
+            return delete_result
 
-            delete_result = self._base._extract_mutation_result(
-                result, "dashboardDelete", error_message="Dashboard deletion failed"
-            )
-            if isinstance(delete_result, ApiError):
-                return delete_result
-
-            status = delete_result.get("status")
-            return {
-                "success": True,
-                "message": f"Dashboard '{dashboard_guid}' deleted successfully",
-                "status": status,
-            }
-
-        except API_ERRORS as e:
-            return handle_api_error("delete dashboard", e)
+        return {
+            "success": True,
+            "message": f"Dashboard '{dashboard_guid}' deleted successfully",
+            "status": delete_result.get("status"),
+        }

@@ -37,7 +37,6 @@ from .strategies.dashboard import (
     DeleteWidgetHandler,
     GetDashboardsHandler,
     GetWidgetsHandler,
-    SearchDashboardsHandler,
     UpdateWidgetHandler,
 )
 from .strategies.entities import (
@@ -87,7 +86,6 @@ class ToolHandlers:
             "get_dashboards": GetDashboardsHandler(client, config),
             "create_dashboard": CreateDashboardHandler(client, config),
             "add_widget_to_dashboard": AddWidgetHandler(client, config),
-            "search_all_dashboards": SearchDashboardsHandler(client, config),
             "get_dashboard_widgets": GetWidgetsHandler(client, config),
             "update_widget": UpdateWidgetHandler(client, config),
             "delete_widget": DeleteWidgetHandler(client, config),
@@ -130,8 +128,12 @@ class ToolHandlers:
 
     async def handle_tool_call(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
         try:
+            strategy = self._strategies.get(name)
+            if strategy is None:
+                return [TextContent(type="text", text=f"Unknown tool: {name}")]
+
             account_id = arguments.get("account_id", self.config.account_id)
-            if not account_id:
+            if strategy.requires_account_id and not account_id:
                 return [
                     TextContent(
                         type="text",
@@ -139,9 +141,7 @@ class ToolHandlers:
                     )
                 ]
 
-            if name in self._strategies:
-                return await self._strategies[name].handle(arguments, account_id)
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+            return await strategy.handle(arguments, account_id or "")
 
         except (ValidationError, ToolError) as e:
             return [TextContent(type="text", text=f"Error: {e}")]

@@ -38,24 +38,20 @@ class AlertsClient:
 
         policy_input = {"name": name, "incidentPreference": incident_preference}
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "policy": policy_input})
+        policy_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "policy": policy_input},
+            "alertsPolicyCreate",
+            "create alert policy",
+        )
+        if isinstance(policy_result, ApiError):
+            return policy_result
 
-            policy_result = self._base._extract_mutation_result(
-                result, "alertsPolicyCreate", error_message="Failed to create alert policy"
-            )
-            if isinstance(policy_result, ApiError):
-                return policy_result
-
-            return format_create_response(
-                policy_result,
-                policy_id="id",
-                name="name",
-                incident_preference="incidentPreference",
-            )
-
-        except API_ERRORS as e:
-            return handle_api_error("create alert policy", e)
+        return format_create_response(
+            policy_result,
+            name="name",
+            incident_preference="incidentPreference",
+        )
 
     async def create_nrql_condition(
         self,
@@ -114,28 +110,22 @@ class AlertsClient:
         if description:
             condition_config["description"] = description
 
-        try:
-            result = await self._base.execute_graphql(
-                mutation, {"accountId": int(account_id), "policyId": policy_id, "condition": condition_config}
-            )
+        condition_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "policyId": policy_id, "condition": condition_config},
+            "alertsNrqlConditionStaticCreate",
+            "create NRQL condition",
+        )
+        if isinstance(condition_result, ApiError):
+            return condition_result
 
-            condition_result = self._base._extract_mutation_result(
-                result, "alertsNrqlConditionStaticCreate", error_message="Failed to create NRQL condition"
-            )
-            if isinstance(condition_result, ApiError):
-                return condition_result
-
-            return format_create_response(
-                condition_result,
-                condition_id="id",
-                name="name",
-                enabled="enabled",
-                query=["nrql", "query"],
-                terms="terms",
-            )
-
-        except API_ERRORS as e:
-            return handle_api_error("create NRQL condition", e)
+        return format_create_response(
+            condition_result,
+            name="name",
+            enabled="enabled",
+            query=["nrql", "query"],
+            terms="terms",
+        )
 
     async def create_notification_destination(
         self, account_id: str, name: str, destination_type: str, properties: dict[str, Any]
@@ -182,7 +172,6 @@ class AlertsClient:
             destination = create_result.get("destination", {})
             return format_create_response(
                 destination,
-                destination_id="id",
                 name="name",
                 type="type",
                 properties="properties",
@@ -246,7 +235,6 @@ class AlertsClient:
             channel = create_result.get("channel", {})
             return format_create_response(
                 channel,
-                channel_id="id",
                 name="name",
                 type="type",
                 destination_id="destinationId",
@@ -316,29 +304,23 @@ class AlertsClient:
             "issuesFilter": {"name": filter_name, "type": "FILTER", "predicates": filter_predicates or []},
         }
 
-        try:
-            result = await self._base.execute_graphql(
-                mutation, {"accountId": int(account_id), "createWorkflowData": workflow_config}
-            )
+        create_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "createWorkflowData": workflow_config},
+            "aiWorkflowsCreateWorkflow",
+            "create workflow",
+        )
+        if isinstance(create_result, ApiError):
+            return create_result
 
-            create_result = self._base._extract_mutation_result(
-                result, "aiWorkflowsCreateWorkflow", error_message="Workflow creation failed"
-            )
-            if isinstance(create_result, ApiError):
-                return create_result
-
-            workflow = create_result.get("workflow", {})
-            return format_create_response(
-                workflow,
-                workflow_id="id",
-                name="name",
-                destination_configurations="destinationConfigurations",
-                issues_filter="issuesFilter",
-                enrichments="enrichments",
-            )
-
-        except API_ERRORS as e:
-            return handle_api_error("create workflow", e)
+        workflow = create_result.get("workflow", {})
+        return format_create_response(
+            workflow,
+            name="name",
+            destination_configurations="destinationConfigurations",
+            issues_filter="issuesFilter",
+            enrichments="enrichments",
+        )
 
     async def get_alert_policies(self, account_id: str) -> PaginatedResult | ApiError:
         """Get list of alert policies with cursor-based pagination"""
@@ -574,23 +556,17 @@ class AlertsClient:
         }
         """
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "id": policy_id})
+        delete_result = await self._base.execute_mutation(
+            mutation, {"accountId": int(account_id), "id": policy_id}, "alertsPolicyDelete", "delete alert policy"
+        )
+        if isinstance(delete_result, ApiError):
+            return delete_result
 
-            delete_result = self._base._extract_mutation_result(
-                result, "alertsPolicyDelete", error_message="Failed to delete alert policy"
-            )
-            if isinstance(delete_result, ApiError):
-                return delete_result
-
-            return {
-                "success": True,
-                "id": delete_result.get("id"),
-                "message": f"Alert policy '{policy_id}' deleted successfully",
-            }
-
-        except API_ERRORS as e:
-            return handle_api_error("delete alert policy", e)
+        return {
+            "success": True,
+            "id": delete_result.get("id"),
+            "message": f"Alert policy '{policy_id}' deleted successfully",
+        }
 
     async def update_alert_policy(
         self,
@@ -616,26 +592,20 @@ class AlertsClient:
         if incident_preference is not None:
             policy_input["incidentPreference"] = incident_preference
 
-        try:
-            result = await self._base.execute_graphql(
-                mutation, {"accountId": int(account_id), "id": policy_id, "policy": policy_input}
-            )
+        policy_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "id": policy_id, "policy": policy_input},
+            "alertsPolicyUpdate",
+            "update alert policy",
+        )
+        if isinstance(policy_result, ApiError):
+            return policy_result
 
-            policy_result = self._base._extract_mutation_result(
-                result, "alertsPolicyUpdate", error_message="Failed to update alert policy"
-            )
-            if isinstance(policy_result, ApiError):
-                return policy_result
-
-            return format_create_response(
-                policy_result,
-                policy_id="id",
-                name="name",
-                incident_preference="incidentPreference",
-            )
-
-        except API_ERRORS as e:
-            return handle_api_error("update alert policy", e)
+        return format_create_response(
+            policy_result,
+            name="name",
+            incident_preference="incidentPreference",
+        )
 
     async def delete_nrql_condition(self, account_id: str, condition_id: str) -> dict[str, Any] | ApiError:
         """Delete an alert condition"""
@@ -647,23 +617,20 @@ class AlertsClient:
         }
         """
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "id": condition_id})
+        delete_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "id": condition_id},
+            "alertsConditionDelete",
+            "delete alert condition",
+        )
+        if isinstance(delete_result, ApiError):
+            return delete_result
 
-            delete_result = self._base._extract_mutation_result(
-                result, "alertsConditionDelete", error_message="Failed to delete alert condition"
-            )
-            if isinstance(delete_result, ApiError):
-                return delete_result
-
-            return {
-                "success": True,
-                "id": delete_result.get("id"),
-                "message": "Alert condition deleted successfully",
-            }
-
-        except API_ERRORS as e:
-            return handle_api_error("delete alert condition", e)
+        return {
+            "success": True,
+            "id": delete_result.get("id"),
+            "message": "Alert condition deleted successfully",
+        }
 
     async def _get_nrql_condition(self, account_id: str, condition_id: str) -> dict[str, Any] | ApiError:
         """Fetch a single NRQL condition by ID to read its current state."""
@@ -769,28 +736,22 @@ class AlertsClient:
                 }
             ]
 
-        try:
-            result = await self._base.execute_graphql(
-                mutation, {"accountId": int(account_id), "id": condition_id, "condition": condition_config}
-            )
+        condition_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "id": condition_id, "condition": condition_config},
+            "alertsNrqlConditionStaticUpdate",
+            "update NRQL condition",
+        )
+        if isinstance(condition_result, ApiError):
+            return condition_result
 
-            condition_result = self._base._extract_mutation_result(
-                result, "alertsNrqlConditionStaticUpdate", error_message="Failed to update NRQL condition"
-            )
-            if isinstance(condition_result, ApiError):
-                return condition_result
-
-            return format_create_response(
-                condition_result,
-                condition_id="id",
-                name="name",
-                enabled="enabled",
-                query=["nrql", "query"],
-                terms="terms",
-            )
-
-        except API_ERRORS as e:
-            return handle_api_error("update NRQL condition", e)
+        return format_create_response(
+            condition_result,
+            name="name",
+            enabled="enabled",
+            query=["nrql", "query"],
+            terms="terms",
+        )
 
     async def delete_notification_destination(self, account_id: str, destination_id: str) -> dict[str, Any] | ApiError:
         """Delete a notification destination"""
@@ -878,25 +839,18 @@ class AlertsClient:
         if schedule:
             rule_input["schedule"] = schedule
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "rule": rule_input})
+        rule_result = await self._base.execute_mutation(
+            mutation, {"accountId": int(account_id), "rule": rule_input}, "alertsMutingRuleCreate", "create muting rule"
+        )
+        if isinstance(rule_result, ApiError):
+            return rule_result
 
-            rule_result = self._base._extract_mutation_result(
-                result, "alertsMutingRuleCreate", error_message="Failed to create muting rule"
-            )
-            if isinstance(rule_result, ApiError):
-                return rule_result
-
-            return format_create_response(
-                rule_result,
-                rule_id="id",
-                name="name",
-                enabled="enabled",
-                schedule="schedule",
-            )
-
-        except API_ERRORS as e:
-            return handle_api_error("create muting rule", e)
+        return format_create_response(
+            rule_result,
+            name="name",
+            enabled="enabled",
+            schedule="schedule",
+        )
 
     async def get_muting_rules(self, account_id: str) -> PaginatedResult | ApiError:
         """Get all muting rules for the account"""
@@ -953,23 +907,17 @@ class AlertsClient:
         }
         """
 
-        try:
-            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "id": rule_id})
+        delete_result = await self._base.execute_mutation(
+            mutation, {"accountId": int(account_id), "id": rule_id}, "alertsMutingRuleDelete", "delete muting rule"
+        )
+        if isinstance(delete_result, ApiError):
+            return delete_result
 
-            delete_result = self._base._extract_mutation_result(
-                result, "alertsMutingRuleDelete", error_message="Failed to delete muting rule"
-            )
-            if isinstance(delete_result, ApiError):
-                return delete_result
-
-            return {
-                "success": True,
-                "id": delete_result.get("id"),
-                "message": f"Muting rule '{rule_id}' deleted successfully",
-            }
-
-        except API_ERRORS as e:
-            return handle_api_error("delete muting rule", e)
+        return {
+            "success": True,
+            "id": delete_result.get("id"),
+            "message": f"Muting rule '{rule_id}' deleted successfully",
+        }
 
     async def delete_workflow(
         self, account_id: str, workflow_id: str, delete_channels: bool = True
@@ -987,22 +935,17 @@ class AlertsClient:
         }
         """
 
-        try:
-            result = await self._base.execute_graphql(
-                mutation, {"accountId": int(account_id), "deleteChannels": delete_channels, "id": workflow_id}
-            )
+        delete_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "deleteChannels": delete_channels, "id": workflow_id},
+            "aiWorkflowsDeleteWorkflow",
+            "delete workflow",
+        )
+        if isinstance(delete_result, ApiError):
+            return delete_result
 
-            delete_result = self._base._extract_mutation_result(
-                result, "aiWorkflowsDeleteWorkflow", error_message="Workflow deletion failed"
-            )
-            if isinstance(delete_result, ApiError):
-                return delete_result
-
-            return {
-                "success": True,
-                "id": delete_result.get("id"),
-                "message": "Workflow deleted successfully",
-            }
-
-        except API_ERRORS as e:
-            return handle_api_error("delete workflow", e)
+        return {
+            "success": True,
+            "id": delete_result.get("id"),
+            "message": "Workflow deleted successfully",
+        }

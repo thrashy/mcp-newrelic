@@ -12,6 +12,7 @@ import httpx
 
 from ..config import NewRelicConfig
 from ..types import ApiError, DecodedEntityGuid, PaginatedResult
+from ..utils.error_handling import API_ERRORS, handle_api_error
 from ..utils.graphql_helpers import extract_nested_data
 
 logger = logging.getLogger(__name__)
@@ -66,17 +67,27 @@ class BaseNewRelicClient:
 
         return result
 
-    def _extract_mutation_result(
+    def extract_mutation_result(
         self, result: dict[str, Any], mutation_key: str, *, error_message: str = "Mutation failed"
     ) -> dict[str, Any] | ApiError:
         """Extract mutation result, returning ApiError if empty or if errors are present."""
-        mutation_result: dict[str, Any] = result.get("data", {}).get(mutation_key, {})
+        mutation_result: dict[str, Any] = (result.get("data") or {}).get(mutation_key) or {}
         errors = mutation_result.get("errors")
         if errors:
             return ApiError(f"{error_message}: {errors}")
         if not mutation_result:
             return ApiError(error_message)
         return mutation_result
+
+    async def execute_mutation(
+        self, mutation: str, variables: dict[str, Any], mutation_key: str, operation: str
+    ) -> dict[str, Any] | ApiError:
+        """Execute a GraphQL mutation and extract its result, mapping failures to ApiError."""
+        try:
+            result = await self.execute_graphql(mutation, variables)
+            return self.extract_mutation_result(result, mutation_key, error_message=f"Failed to {operation}")
+        except API_ERRORS as e:
+            return handle_api_error(operation, e)
 
     async def query_nrql(self, account_id: str, query: str) -> dict[str, Any]:
         """Execute a NRQL query using GraphQL variables to prevent injection"""
@@ -218,3 +229,30 @@ class BaseNewRelicClient:
             all_items = all_items[:limit]
 
         return PaginatedResult(items=all_items, total_count=total_count)
+
+    async def entity_search_paginated(
+        self, search_query: str, entity_fragment: str, *, limit: int | None = None
+    ) -> PaginatedResult:
+        """Run a cursor-paginated entitySearch query with the given entity fields fragment."""
+        query = f"""
+        query($searchQuery: String!, $cursor: String) {{
+          actor {{
+            entitySearch(query: $searchQuery) {{
+              results(cursor: $cursor) {{
+                entities {{
+                  {entity_fragment}
+                }}
+                nextCursor
+              }}
+              count
+            }}
+          }}
+        }}
+        """
+        return await self.paginate_graphql(
+            query,
+            {"searchQuery": search_query},
+            ["data", "actor", "entitySearch", "results"],
+            "entities",
+            limit=limit,
+        )

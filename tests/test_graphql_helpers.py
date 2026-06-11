@@ -3,9 +3,7 @@
 from newrelic_mcp.utils.graphql_helpers import (
     escape_nrql_string,
     extract_nested_data,
-    extract_notification_data,
     extract_nrql_results,
-    extract_workflow_data,
 )
 
 
@@ -37,18 +35,6 @@ class TestExtractNrqlResults:
     def test_returns_empty_list_when_results_not_a_list(self):
         result = {"data": {"actor": {"account": {"nrql": {"results": None}}}}}
         assert extract_nrql_results(result) == []
-
-
-class TestExtractNotificationData:
-    def test_extracts_destinations(self):
-        data = {"data": {"actor": {"account": {"aiNotifications": {"destinations": {"entities": [{"id": "1"}]}}}}}}
-        assert extract_notification_data(data, "destinations") == {"entities": [{"id": "1"}]}
-
-
-class TestExtractWorkflowData:
-    def test_extracts_workflows(self):
-        data = {"data": {"actor": {"account": {"aiWorkflows": {"workflows": {"entities": [{"id": "wf1"}]}}}}}}
-        assert extract_workflow_data(data) == {"entities": [{"id": "wf1"}]}
 
 
 class TestEscapeNrqlString:

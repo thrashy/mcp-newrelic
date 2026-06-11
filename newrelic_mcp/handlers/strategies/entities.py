@@ -12,6 +12,8 @@ from .base import ToolHandlerStrategy
 class EntitySearchHandler(ToolHandlerStrategy):
     """Handler for entity search"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         name = arguments.get("name")
         entity_type = arguments.get("entity_type")
@@ -79,6 +81,8 @@ class EntitySearchHandler(ToolHandlerStrategy):
 class DecodeEntityGuidHandler(ToolHandlerStrategy):
     """Handler for decoding entity GUIDs"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = arguments["guid"]
         try:
@@ -97,6 +101,8 @@ class DecodeEntityGuidHandler(ToolHandlerStrategy):
 
 class GetEntityHandler(ToolHandlerStrategy):
     """Handler for looking up a single entity by GUID"""
+
+    requires_account_id = False
 
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
@@ -157,6 +163,8 @@ class GetEntityHandler(ToolHandlerStrategy):
 class GetEntityTagsHandler(ToolHandlerStrategy):
     """Handler for getting entity tags"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
 
@@ -185,6 +193,8 @@ class GetEntityTagsHandler(ToolHandlerStrategy):
 class AddTagsHandler(ToolHandlerStrategy):
     """Handler for adding tags to an entity"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
         tags = arguments["tags"]
@@ -199,6 +209,8 @@ class AddTagsHandler(ToolHandlerStrategy):
 
 class DeleteTagsHandler(ToolHandlerStrategy):
     """Handler for deleting tags from an entity"""
+
+    requires_account_id = False
 
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
@@ -215,6 +227,8 @@ class DeleteTagsHandler(ToolHandlerStrategy):
 class ReplaceTagsHandler(ToolHandlerStrategy):
     """Handler for replacing all tags on an entity"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
         tags = arguments["tags"]
@@ -229,6 +243,8 @@ class ReplaceTagsHandler(ToolHandlerStrategy):
 
 class DeleteTagValuesHandler(ToolHandlerStrategy):
     """Handler for deleting specific tag values from an entity"""
+
+    requires_account_id = False
 
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
@@ -282,6 +298,8 @@ def _indicator_from_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
 class GetServiceLevelHandler(ToolHandlerStrategy):
     """Handler for fetching full SLI definitions for an entity"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
         indicators = self._unwrap(
@@ -311,6 +329,8 @@ class CreateServiceLevelHandler(ToolHandlerStrategy):
 class UpdateServiceLevelHandler(ToolHandlerStrategy):
     """Handler for updating a service level indicator"""
 
+    requires_account_id = False
+
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)
         indicator = _indicator_from_arguments(arguments)
@@ -323,6 +343,8 @@ class UpdateServiceLevelHandler(ToolHandlerStrategy):
 
 class DeleteServiceLevelHandler(ToolHandlerStrategy):
     """Handler for deleting a service level indicator"""
+
+    requires_account_id = False
 
     async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
         guid = self._require_guid(arguments)

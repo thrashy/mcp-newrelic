@@ -92,7 +92,7 @@ class TestReadResource:
                     "policyId": "p1",
                     "enabled": True,
                     "nrql": {"query": "SELECT count(*) FROM Error"},
-                    "terms": [{"threshold": 5, "operator": "ABOVE", "priority": "CRITICAL"}],
+                    "terms": [{"threshold": 5, "operator": "ABOVE", "priority": "CRITICAL", "thresholdDuration": 300}],
                 }
             ],
             total_count=1,
@@ -101,7 +101,8 @@ class TestReadResource:
         result = await handler.read_resource("newrelic://alerts/conditions")
 
         assert "High Error Rate" in result
-        assert "ABOVE" in result
+        assert "above 5" in result
+        assert "Policy p1" in result
 
     async def test_alert_workflows(self, mock_client, config):
         mock_client.alerts.get_workflows.return_value = PaginatedResult(

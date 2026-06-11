@@ -14,9 +14,6 @@ from .base_client import BaseNewRelicClient
 
 logger = logging.getLogger(__name__)
 
-# Shared data path for entitySearch pagination
-_ENTITY_SEARCH_PATH = ["data", "actor", "entitySearch", "results"]
-
 
 class EntitiesClient:
     """Client for New Relic entity, tagging, service level, and synthetics APIs"""
@@ -27,15 +24,11 @@ class EntitiesClient:
     async def _execute_tag_mutation(
         self, mutation: str, variables: dict[str, Any], mutation_key: str, operation: str
     ) -> dict[str, Any] | ApiError:
-        """Execute a tagging mutation and check for errors."""
-        try:
-            result = await self._base.execute_graphql(mutation, variables)
-            errors = result.get("data", {}).get(mutation_key, {}).get("errors", [])
-            if errors:
-                return ApiError(errors[0].get("message", "Unknown error"))
-            return {"success": True}
-        except API_ERRORS as e:
-            return handle_api_error(operation, e)
+        """Execute a tagging mutation, mapping the payload to a simple success marker."""
+        result = await self._base.execute_mutation(mutation, variables, mutation_key, operation)
+        if isinstance(result, ApiError):
+            return result
+        return {"success": True}
 
     async def entity_search(
         self,
@@ -69,14 +62,9 @@ class EntitiesClient:
 
         query_string = " AND ".join(parts) if parts else "domain IN ('APM', 'INFRA', 'SYNTH', 'BROWSER')"
 
-        # Use a lighter query when minimal_output is requested
+        # Use a lighter fields fragment when minimal_output is requested
         if minimal_output:
-            query = """
-            query($searchQuery: String!, $cursor: String) {
-              actor {
-                entitySearch(query: $searchQuery) {
-                  results(cursor: $cursor) {
-                    entities {
+            entity_fragment = """
                       guid
                       name
                       entityType
@@ -84,21 +72,9 @@ class EntitiesClient:
                       type
                       alertSeverity
                       reporting
-                    }
-                    nextCursor
-                  }
-                  count
-                }
-              }
-            }
             """
         else:
-            query = """
-            query($searchQuery: String!, $cursor: String) {
-              actor {
-                entitySearch(query: $searchQuery) {
-                  results(cursor: $cursor) {
-                    entities {
+            entity_fragment = """
                       guid
                       name
                       entityType
@@ -125,25 +101,12 @@ class EntitiesClient:
                           memoryUsedPercent
                         }
                       }
-                    }
-                    nextCursor
-                  }
-                  count
-                }
-              }
-            }
             """
 
         effective_limit = min(limit, 200)
 
         try:
-            result = await self._base.paginate_graphql(
-                query,
-                {"searchQuery": query_string},
-                _ENTITY_SEARCH_PATH,
-                "entities",
-                limit=effective_limit,
-            )
+            result = await self._base.entity_search_paginated(query_string, entity_fragment, limit=effective_limit)
             return result.items
         except API_ERRORS as e:
             return handle_api_error("entity search", e)
@@ -232,12 +195,7 @@ class EntitiesClient:
 
     async def list_service_levels(self, account_id: str) -> list[dict[str, Any]] | ApiError:
         """List service level indicators (SLIs) for the account"""
-        query = """
-        query($searchQuery: String!, $cursor: String) {
-          actor {
-            entitySearch(query: $searchQuery) {
-              results(cursor: $cursor) {
-                entities {
+        entity_fragment = """
                   guid
                   name
                   entityType
@@ -247,24 +205,12 @@ class EntitiesClient:
                     key
                     values
                   }
-                }
-                nextCursor
-              }
-              count
-            }
-          }
-        }
         """
 
         search_query = f"accountId = {int(account_id)} AND domain = 'EXT' AND type = 'SERVICE_LEVEL'"
 
         try:
-            result = await self._base.paginate_graphql(
-                query,
-                {"searchQuery": search_query},
-                _ENTITY_SEARCH_PATH,
-                "entities",
-            )
+            result = await self._base.entity_search_paginated(search_query, entity_fragment)
             all_entities = result.items
 
             # Enrich with SLI compliance data from NRQL
@@ -307,19 +253,6 @@ class EntitiesClient:
                     badEvents { from where select { attribute function threshold } }
                   }
     """
-
-    async def _execute_sli_mutation(
-        self, mutation: str, variables: dict[str, Any], mutation_key: str, operation: str
-    ) -> dict[str, Any] | ApiError:
-        """Execute a service level mutation and return the mutation payload."""
-        try:
-            result = await self._base.execute_graphql(mutation, variables)
-            data: dict[str, Any] | None = (result.get("data") or {}).get(mutation_key)
-            if not data:
-                return ApiError(f"Failed to {operation}: empty response")
-            return data
-        except API_ERRORS as e:
-            return handle_api_error(operation, e)
 
     async def get_service_level(self, guid: str, _resolve_associated: bool = True) -> list[dict[str, Any]] | ApiError:
         """Get full SLI definitions (events, objectives) for an entity.
@@ -373,7 +306,7 @@ class EntitiesClient:
         }}
         """
         indicator = {**indicator, "events": {**indicator["events"], "accountId": int(account_id)}}
-        return await self._execute_sli_mutation(
+        return await self._base.execute_mutation(
             mutation,
             {"entityGuid": entity_guid, "indicator": indicator},
             "serviceLevelCreate",
@@ -396,7 +329,7 @@ class EntitiesClient:
         if "events" in indicator:
             events = {k: v for k, v in indicator["events"].items() if k != "accountId"}
             indicator = {**indicator, "events": events}
-        return await self._execute_sli_mutation(
+        return await self._base.execute_mutation(
             mutation, {"guid": guid, "indicator": indicator}, "serviceLevelUpdate", "update service level"
         )
 
@@ -410,16 +343,11 @@ class EntitiesClient:
           serviceLevelDelete(guid: $guid) { id name }
         }
         """
-        return await self._execute_sli_mutation(mutation, {"guid": guid}, "serviceLevelDelete", "delete service level")
+        return await self._base.execute_mutation(mutation, {"guid": guid}, "serviceLevelDelete", "delete service level")
 
     async def list_synthetic_monitors(self, account_id: str) -> list[dict[str, Any]] | ApiError:
         """List synthetic monitors via entity search with cursor-based pagination"""
-        query = """
-        query($searchQuery: String!, $cursor: String) {
-          actor {
-            entitySearch(query: $searchQuery) {
-              results(cursor: $cursor) {
-                entities {
+        entity_fragment = """
                   guid
                   name
                   alertSeverity
@@ -439,23 +367,11 @@ class EntitiesClient:
                     key
                     values
                   }
-                }
-                nextCursor
-              }
-              count
-            }
-          }
-        }
         """
 
         search_query = f"domain = 'SYNTH' AND type = 'MONITOR' AND accountId = {int(account_id)}"
         try:
-            result = await self._base.paginate_graphql(
-                query,
-                {"searchQuery": search_query},
-                _ENTITY_SEARCH_PATH,
-                "entities",
-            )
+            result = await self._base.entity_search_paginated(search_query, entity_fragment)
             return result.items
         except API_ERRORS as e:
             return handle_api_error("list synthetic monitors", e)
