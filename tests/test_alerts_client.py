@@ -171,6 +171,123 @@ class TestGetWorkflows:
         assert result.items[0]["name"] == "Prod Workflow"
 
 
+class TestUpdateMutingRule:
+    async def test_success_sends_only_provided_fields(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"alertsMutingRuleUpdate": {"id": "mr1", "name": "Renamed", "enabled": False}}
+        }
+        result = await client.update_muting_rule("1234567", "mr1", name="Renamed", enabled=False)
+        assert result["success"] is True
+        assert result["name"] == "Renamed"
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["id"] == "mr1"
+        assert variables["rule"] == {"name": "Renamed", "enabled": False}
+
+    async def test_conditions_included_when_provided(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"alertsMutingRuleUpdate": {"id": "mr1"}}}
+        conditions = [{"attribute": "policyName", "operator": "EQUALS", "values": ["Prod"]}]
+        await client.update_muting_rule("1234567", "mr1", condition_operator="OR", conditions=conditions)
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["rule"] == {"condition": {"operator": "OR", "conditions": conditions}}
+
+    async def test_empty_response(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"alertsMutingRuleUpdate": {}}}
+        result = await client.update_muting_rule("1234567", "mr1", name="X")
+        assert isinstance(result, ApiError)
+
+    async def test_exception(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("fail"))
+        result = await client.update_muting_rule("1234567", "mr1", name="X")
+        assert isinstance(result, ApiError)
+
+
+class TestUpdateWorkflow:
+    async def test_success_sends_only_provided_fields(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"aiWorkflowsUpdateWorkflow": {"workflow": {"id": "wf1", "name": "Renamed"}, "errors": None}}
+        }
+        result = await client.update_workflow("1234567", "wf1", name="Renamed", enabled=True)
+        assert result["success"] is True
+        assert result["name"] == "Renamed"
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["updateWorkflowData"] == {"id": "wf1", "name": "Renamed", "workflowEnabled": True}
+
+    async def test_destination_configurations_passed_through(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"aiWorkflowsUpdateWorkflow": {"workflow": {"id": "wf1"}, "errors": None}}
+        }
+        await client.update_workflow("1234567", "wf1", destination_configurations=[{"channelId": "ch9"}])
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["updateWorkflowData"]["destinationConfigurations"] == [{"channelId": "ch9"}]
+
+    async def test_with_errors(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"aiWorkflowsUpdateWorkflow": {"workflow": None, "errors": [{"description": "not found"}]}}
+        }
+        result = await client.update_workflow("1234567", "wf1", name="X")
+        assert isinstance(result, ApiError)
+
+    async def test_exception(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("fail"))
+        result = await client.update_workflow("1234567", "wf1", name="X")
+        assert isinstance(result, ApiError)
+
+
+class TestDeleteNotificationChannel:
+    async def test_success(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"aiNotificationsDeleteChannel": {"ids": ["ch1"], "error": None}}
+        }
+        result = await client.delete_notification_channel("1234567", "ch1")
+        assert result["success"] is True
+        assert result["id"] == "ch1"
+
+    async def test_error_with_details(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"aiNotificationsDeleteChannel": {"ids": [], "error": {"details": "channel in use"}}}
+        }
+        result = await client.delete_notification_channel("1234567", "ch1")
+        assert isinstance(result, ApiError)
+        assert "channel in use" in result.message
+
+    async def test_exception(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("fail"))
+        result = await client.delete_notification_channel("1234567", "ch1")
+        assert isinstance(result, ApiError)
+
+
+class TestUpdateNRQLConditionAggregationWindow:
+    async def test_aggregation_window_sets_signal(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"alertsNrqlConditionStaticUpdate": {"id": "c1", "name": "Cond", "enabled": True}}
+        }
+        result = await client.update_nrql_condition("1234567", "c1", aggregation_window=120)
+        assert result["success"] is True
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["condition"]["signal"] == {"aggregationWindow": 120}
+
+    async def test_omitted_when_not_provided(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"alertsNrqlConditionStaticUpdate": {"id": "c1", "name": "Cond", "enabled": True}}
+        }
+        await client.update_nrql_condition("1234567", "c1", name="Cond")
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert "signal" not in variables["condition"]
+
+
 class TestDeleteWorkflow:
     async def test_success(self):
         client = _make_client()

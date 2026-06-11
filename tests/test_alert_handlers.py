@@ -4,19 +4,27 @@ import pytest
 
 from newrelic_mcp.handlers.strategies.alerts import (
     CreateAlertPolicyHandler,
+    CreateMutingRuleHandler,
+    CreateNotificationChannelHandler,
+    CreateNotificationDestinationHandler,
     CreateNRQLConditionHandler,
     CreateWorkflowHandler,
     DeleteAlertPolicyHandler,
+    DeleteMutingRuleHandler,
+    DeleteNotificationChannelHandler,
     DeleteNotificationDestinationHandler,
     DeleteNRQLConditionHandler,
     DeleteWorkflowHandler,
     ListAlertConditionsHandler,
     ListAlertPoliciesHandler,
+    ListMutingRulesHandler,
     ListNotificationChannelsHandler,
     ListNotificationDestinationsHandler,
     ListWorkflowsHandler,
     UpdateAlertPolicyHandler,
+    UpdateMutingRuleHandler,
     UpdateNRQLConditionHandler,
+    UpdateWorkflowHandler,
 )
 from newrelic_mcp.types import ApiError, PaginatedResult, ToolError
 
@@ -273,3 +281,193 @@ class TestListAlertConditionsSearchFilters:
         handler = ListAlertConditionsHandler(mock_client, config)
         await handler.handle({"query": "Transaction"}, "1234567")
         mock_client.alerts.get_alert_conditions.assert_called_once_with("1234567", None, name=None, query="Transaction")
+
+
+class TestCreateMutingRuleHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.create_muting_rule.return_value = {
+            "success": True,
+            "id": "mr1",
+            "schedule": {"repeat": "WEEKLY", "timeZone": "UTC", "startTime": "T1", "endTime": "T2"},
+        }
+        handler = CreateMutingRuleHandler(mock_client, config)
+        conditions = [{"attribute": "policyName", "operator": "EQUALS", "values": ["Prod"]}]
+        result = await handler.handle({"name": "Maintenance", "conditions": conditions}, "1234567")
+        assert "Maintenance" in result[0].text
+        assert "mr1" in result[0].text
+        assert "WEEKLY" in result[0].text
+        mock_client.alerts.create_muting_rule.assert_called_once_with(
+            "1234567", "Maintenance", None, True, "AND", conditions, None
+        )
+
+    async def test_error_propagated(self, mock_client, config):
+        mock_client.alerts.create_muting_rule.return_value = ApiError("bad schedule")
+        handler = CreateMutingRuleHandler(mock_client, config)
+        with pytest.raises(ToolError, match="bad schedule"):
+            await handler.handle({"name": "Maintenance", "conditions": []}, "1234567")
+
+
+class TestListMutingRulesHandler:
+    async def test_no_rules(self, mock_client, config):
+        mock_client.alerts.get_muting_rules.return_value = PaginatedResult(items=[])
+        handler = ListMutingRulesHandler(mock_client, config)
+        result = await handler.handle({}, "1234567")
+        assert "No muting rules" in result[0].text
+
+    async def test_rules_listed(self, mock_client, config):
+        mock_client.alerts.get_muting_rules.return_value = PaginatedResult(
+            items=[
+                {
+                    "id": "mr1",
+                    "name": "Weekend Mute",
+                    "enabled": True,
+                    "description": "Mute on weekends",
+                    "condition": {
+                        "operator": "AND",
+                        "conditions": [{"attribute": "policyName", "operator": "EQUALS", "values": ["Prod"]}],
+                    },
+                    "schedule": {
+                        "repeat": "WEEKLY",
+                        "timeZone": "UTC",
+                        "startTime": "T1",
+                        "endTime": "T2",
+                        "weeklyRepeatDays": ["SATURDAY", "SUNDAY"],
+                    },
+                }
+            ]
+        )
+        handler = ListMutingRulesHandler(mock_client, config)
+        result = await handler.handle({}, "1234567")
+        text = result[0].text
+        assert "Weekend Mute" in text
+        assert "mr1" in text
+        assert "policyName EQUALS ['Prod']" in text
+        assert "SATURDAY" in text
+
+    async def test_error_from_client(self, mock_client, config):
+        mock_client.alerts.get_muting_rules.return_value = ApiError("unauthorized")
+        handler = ListMutingRulesHandler(mock_client, config)
+        result = await handler.handle({}, "1234567")
+        assert result[0].text.startswith("Error")
+
+
+class TestDeleteMutingRuleHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.delete_muting_rule.return_value = {"success": True, "id": "mr1"}
+        handler = DeleteMutingRuleHandler(mock_client, config)
+        result = await handler.handle({"rule_id": "mr1"}, "1234567")
+        assert "deleted successfully" in result[0].text
+
+    async def test_error(self, mock_client, config):
+        mock_client.alerts.delete_muting_rule.return_value = ApiError("not found")
+        handler = DeleteMutingRuleHandler(mock_client, config)
+        with pytest.raises(ToolError, match="not found"):
+            await handler.handle({"rule_id": "mr1"}, "1234567")
+
+
+class TestUpdateMutingRuleHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.update_muting_rule.return_value = {"success": True, "id": "mr1"}
+        handler = UpdateMutingRuleHandler(mock_client, config)
+        result = await handler.handle({"rule_id": "mr1", "name": "Renamed"}, "1234567")
+        assert "mr1" in result[0].text
+        assert "updated successfully" in result[0].text
+        mock_client.alerts.update_muting_rule.assert_called_once_with(
+            "1234567",
+            "mr1",
+            name="Renamed",
+            description=None,
+            enabled=None,
+            condition_operator=None,
+            conditions=None,
+            schedule=None,
+        )
+
+    async def test_error(self, mock_client, config):
+        mock_client.alerts.update_muting_rule.return_value = ApiError("not found")
+        handler = UpdateMutingRuleHandler(mock_client, config)
+        with pytest.raises(ToolError, match="not found"):
+            await handler.handle({"rule_id": "mr1", "enabled": False}, "1234567")
+
+
+class TestUpdateWorkflowHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.update_workflow.return_value = {"success": True, "id": "wf1"}
+        handler = UpdateWorkflowHandler(mock_client, config)
+        result = await handler.handle({"workflow_id": "wf1", "name": "Renamed", "enabled": False}, "1234567")
+        assert "wf1" in result[0].text
+        assert "updated successfully" in result[0].text
+        mock_client.alerts.update_workflow.assert_called_once_with(
+            "1234567",
+            "wf1",
+            name="Renamed",
+            enabled=False,
+            destination_configurations=None,
+            issues_filter=None,
+        )
+
+    async def test_error(self, mock_client, config):
+        mock_client.alerts.update_workflow.return_value = ApiError("not found")
+        handler = UpdateWorkflowHandler(mock_client, config)
+        with pytest.raises(ToolError, match="not found"):
+            await handler.handle({"workflow_id": "wf1", "name": "X"}, "1234567")
+
+
+class TestDeleteNotificationChannelHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.delete_notification_channel.return_value = {"success": True, "id": "ch1"}
+        handler = DeleteNotificationChannelHandler(mock_client, config)
+        result = await handler.handle({"channel_id": "ch1"}, "1234567")
+        assert "deleted successfully" in result[0].text
+
+    async def test_error(self, mock_client, config):
+        mock_client.alerts.delete_notification_channel.return_value = ApiError("in use")
+        handler = DeleteNotificationChannelHandler(mock_client, config)
+        with pytest.raises(ToolError, match="in use"):
+            await handler.handle({"channel_id": "ch1"}, "1234567")
+
+
+class TestCreateNotificationDestinationHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.create_notification_destination.return_value = {"success": True, "id": "d1"}
+        handler = CreateNotificationDestinationHandler(mock_client, config)
+        result = await handler.handle(
+            {"name": "Team Email", "type": "EMAIL", "properties": {"email": "team@example.com"}}, "1234567"
+        )
+        assert "Team Email" in result[0].text
+        assert "d1" in result[0].text
+        mock_client.alerts.create_notification_destination.assert_called_once_with(
+            "1234567", "Team Email", "EMAIL", {"email": "team@example.com"}
+        )
+
+    async def test_error_propagated(self, mock_client, config):
+        mock_client.alerts.create_notification_destination.return_value = ApiError("invalid properties")
+        handler = CreateNotificationDestinationHandler(mock_client, config)
+        with pytest.raises(ToolError, match="invalid properties"):
+            await handler.handle({"name": "X", "type": "EMAIL", "properties": {}}, "1234567")
+
+
+class TestCreateNotificationChannelHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.alerts.create_notification_channel.return_value = {"success": True, "id": "ch1"}
+        handler = CreateNotificationChannelHandler(mock_client, config)
+        result = await handler.handle({"name": "Alert Chan", "destination_id": "d1", "type": "EMAIL"}, "1234567")
+        assert "Alert Chan" in result[0].text
+        assert "ch1" in result[0].text
+        mock_client.alerts.create_notification_channel.assert_called_once_with(
+            "1234567", "Alert Chan", "d1", "EMAIL", "IINT", {}
+        )
+
+    async def test_error_propagated(self, mock_client, config):
+        mock_client.alerts.create_notification_channel.return_value = ApiError("destination missing")
+        handler = CreateNotificationChannelHandler(mock_client, config)
+        with pytest.raises(ToolError, match="destination missing"):
+            await handler.handle({"name": "X", "destination_id": "d1", "type": "EMAIL"}, "1234567")
+
+
+class TestUpdateNRQLConditionAggregationWindowPassthrough:
+    async def test_aggregation_window_passed(self, mock_client, config):
+        mock_client.alerts.update_nrql_condition.return_value = {"success": True, "id": "c1"}
+        handler = UpdateNRQLConditionHandler(mock_client, config)
+        await handler.handle({"condition_id": "c1", "aggregation_window": 120}, "1234567")
+        assert mock_client.alerts.update_nrql_condition.call_args.kwargs["aggregation_window"] == 120

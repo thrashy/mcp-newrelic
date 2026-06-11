@@ -229,3 +229,110 @@ class TestDeleteDashboard:
         }
         result = await client.delete_dashboard("bad-guid")
         assert isinstance(result, ApiError)
+
+
+def _dashboard_entity() -> dict:
+    return {
+        "name": "Old Name",
+        "description": "Old description",
+        "permissions": "PRIVATE",
+        "pages": [
+            {
+                "guid": "pg1",
+                "name": "Page 1",
+                "description": "First page",
+                "widgets": [
+                    {
+                        "id": "w1",
+                        "title": "Widget 1",
+                        "layout": {"column": 1, "row": 1, "width": 4, "height": 3},
+                        "visualization": {"id": "viz.line"},
+                        "rawConfiguration": {"nrqlQueries": []},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+class TestUpdateDashboard:
+    async def test_rename_preserves_pages_and_widgets(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(
+            side_effect=[
+                {"data": {"actor": {"entity": _dashboard_entity()}}},
+                {
+                    "data": {
+                        "dashboardUpdate": {
+                            "entityResult": {"guid": "dash-guid", "name": "New Name", "description": "Old description"},
+                            "errors": None,
+                        }
+                    }
+                },
+            ]
+        )
+
+        result = await client.update_dashboard("dash-guid", name="New Name")
+
+        assert result["success"] is True
+        assert result["name"] == "New Name"
+        mutation, variables = client._base.execute_graphql.call_args.args[:2]
+        assert "dashboardUpdate" in mutation
+        dashboard = variables["dashboard"]
+        assert dashboard["name"] == "New Name"
+        assert dashboard["description"] == "Old description"
+        assert dashboard["permissions"] == "PRIVATE"
+        page = dashboard["pages"][0]
+        assert page["guid"] == "pg1"
+        assert page["name"] == "Page 1"
+        widget = page["widgets"][0]
+        assert widget["id"] == "w1"
+        assert widget["layout"] == {"column": 1, "row": 1, "width": 4, "height": 3}
+        assert widget["visualization"] == {"id": "viz.line"}
+
+    async def test_description_only_keeps_name(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(
+            side_effect=[
+                {"data": {"actor": {"entity": _dashboard_entity()}}},
+                {
+                    "data": {
+                        "dashboardUpdate": {
+                            "entityResult": {"guid": "dash-guid", "name": "Old Name", "description": "New description"},
+                            "errors": None,
+                        }
+                    }
+                },
+            ]
+        )
+
+        result = await client.update_dashboard("dash-guid", description="New description")
+
+        assert result["success"] is True
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["dashboard"]["name"] == "Old Name"
+        assert variables["dashboard"]["description"] == "New description"
+
+    async def test_dashboard_not_found(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {"data": {"actor": {"entity": None}}}
+        result = await client.update_dashboard("missing-guid", name="X")
+        assert isinstance(result, ApiError)
+        assert "not found" in result.message
+
+    async def test_mutation_errors(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(
+            side_effect=[
+                {"data": {"actor": {"entity": _dashboard_entity()}}},
+                {"data": {"dashboardUpdate": {"entityResult": None, "errors": [{"description": "denied"}]}}},
+            ]
+        )
+        result = await client.update_dashboard("dash-guid", name="X")
+        assert isinstance(result, ApiError)
+
+    async def test_fetch_exception(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=ValueError("boom"))
+        result = await client.update_dashboard("dash-guid", name="X")
+        assert isinstance(result, ApiError)

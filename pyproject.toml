@@ -2,6 +2,9 @@
 name = "newrelic-mcp-server"
 version = "0.1.0"
 description = "New Relic MCP Server"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "thrashy"}]
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
@@ -9,6 +12,9 @@ dependencies = [
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
 ]
+
+[project.scripts]
+newrelic-mcp = "newrelic_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["newrelic_mcp"]

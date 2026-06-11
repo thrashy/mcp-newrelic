@@ -72,6 +72,28 @@ class CreateDashboardHandler(ToolHandlerStrategy):
         return self._create_success_response(response_text)
 
 
+class UpdateDashboardHandler(ToolHandlerStrategy):
+    """Handler for renaming a dashboard or updating its description"""
+
+    requires_account_id = False
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        dashboard_guid = self._require_guid(arguments)
+        name = arguments.get("name")
+        description = arguments.get("description")
+
+        if name is None and description is None:
+            return self._create_error_response("Provide at least one of 'name' or 'description' to update.")
+
+        result = self._unwrap(
+            await self.client.dashboards.update_dashboard(dashboard_guid, name=name, description=description),
+            f"updating dashboard '{dashboard_guid}'",
+        )
+
+        updated_name = result.get("name") or dashboard_guid
+        return self._create_success_response(f"Dashboard '{updated_name}' updated successfully.")
+
+
 class AddWidgetHandler(ToolHandlerStrategy):
     """Handler for adding widgets to dashboards"""
 

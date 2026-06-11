@@ -252,6 +252,95 @@ class TestExecuteHttpRequestErrorHints:
             await client._execute_http_request({"query": "test"})
 
 
+def _http_response(status_code: int, *, headers: dict[str, str] | None = None, json: dict | None = None):
+    return httpx.Response(
+        status_code,
+        headers=headers,
+        json=json if json is not None else {"data": {"ok": True}},
+        request=httpx.Request("POST", "https://api.newrelic.com/graphql"),
+    )
+
+
+class TestRetry:
+    @pytest.fixture
+    def recorded_sleeps(self, monkeypatch):
+        sleeps: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+
+        monkeypatch.setattr("newrelic_mcp.client.base_client.asyncio.sleep", fake_sleep)
+        return sleeps
+
+    async def test_429_then_success_retries(self, recorded_sleeps):
+        client = BaseNewRelicClient(_make_config())
+        client._http_client.post = AsyncMock(side_effect=[_http_response(429), _http_response(200)])
+
+        result = await client._execute_http_request({"query": "test"})
+
+        assert result == {"data": {"ok": True}}
+        assert client._http_client.post.call_count == 2
+        assert recorded_sleeps == [0.5]
+
+    async def test_retry_after_header_honored(self, recorded_sleeps):
+        client = BaseNewRelicClient(_make_config())
+        client._http_client.post = AsyncMock(
+            side_effect=[_http_response(429, headers={"Retry-After": "3"}), _http_response(200)]
+        )
+
+        await client._execute_http_request({"query": "test"})
+
+        assert recorded_sleeps == [3.0]
+
+    async def test_retry_after_capped_at_ten_seconds(self, recorded_sleeps):
+        client = BaseNewRelicClient(_make_config())
+        client._http_client.post = AsyncMock(
+            side_effect=[_http_response(503, headers={"Retry-After": "120"}), _http_response(200)]
+        )
+
+        await client._execute_http_request({"query": "test"})
+
+        assert recorded_sleeps == [10.0]
+
+    async def test_exhaustion_raises(self, recorded_sleeps):
+        client = BaseNewRelicClient(_make_config())
+        client._http_client.post = AsyncMock(side_effect=[_http_response(429)] * 3)
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await client._execute_http_request({"query": "test"})
+
+        assert client._http_client.post.call_count == 3
+        assert recorded_sleeps == [0.5, 1.0]
+
+    async def test_502_retried(self, recorded_sleeps):
+        client = BaseNewRelicClient(_make_config())
+        client._http_client.post = AsyncMock(side_effect=[_http_response(502), _http_response(200)])
+
+        result = await client._execute_http_request({"query": "test"})
+
+        assert result == {"data": {"ok": True}}
+        assert recorded_sleeps == [0.5]
+
+    async def test_non_retryable_status_not_retried(self, recorded_sleeps):
+        client = BaseNewRelicClient(_make_config())
+        client._http_client.post = AsyncMock(return_value=_http_response(401))
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await client._execute_http_request({"query": "test"})
+
+        assert client._http_client.post.call_count == 1
+        assert recorded_sleeps == []
+
+
+class TestTimeout:
+    async def test_timeout_raises_actionable_value_error(self):
+        client = BaseNewRelicClient(_make_config(timeout=15))
+        client._http_client.post = AsyncMock(side_effect=httpx.ReadTimeout("timed out"))
+
+        with pytest.raises(ValueError, match="timed out after 15s.*NEW_RELIC_TIMEOUT"):
+            await client._execute_http_request({"query": "test"})
+
+
 class TestPaginateGraphql:
     async def test_single_page(self):
         client = BaseNewRelicClient(_make_config())

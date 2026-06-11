@@ -90,6 +90,113 @@ class DashboardsClient:
         entity_result: dict[str, Any] = extracted.get("entityResult", {})
         return entity_result
 
+    async def update_dashboard(
+        self, dashboard_guid: str, name: str | None = None, description: str | None = None
+    ) -> dict[str, Any] | ApiError:
+        """Rename a dashboard and/or update its description.
+
+        dashboardUpdate replaces the entire dashboard, so the current pages and
+        widgets are fetched first and resubmitted with only name/description changed.
+        """
+        fetch_query = """
+        query($guid: EntityGuid!) {
+          actor {
+            entity(guid: $guid) {
+              ... on DashboardEntity {
+                name
+                description
+                permissions
+                pages {
+                  guid
+                  name
+                  description
+                  widgets {
+                    id
+                    title
+                    layout { column row width height }
+                    visualization { id }
+                    rawConfiguration
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+
+        try:
+            result = await self._base.execute_graphql(fetch_query, {"guid": dashboard_guid})
+        except API_ERRORS as e:
+            return handle_api_error("update dashboard", e)
+
+        entity = result.get("data", {}).get("actor", {}).get("entity") or {}
+        if not entity or not entity.get("pages"):
+            return ApiError(f"Dashboard '{dashboard_guid}' not found")
+
+        pages_input = []
+        for page in entity["pages"]:
+            widgets_input = []
+            for w in page.get("widgets", []) or []:
+                widget_input: dict[str, Any] = {
+                    "id": w["id"],
+                    "title": w.get("title", ""),
+                    "visualization": w.get("visualization", {"id": "viz.line"}),
+                    "rawConfiguration": w.get("rawConfiguration", {}),
+                }
+                if w.get("layout"):
+                    widget_input["layout"] = w["layout"]
+                widgets_input.append(widget_input)
+            page_input: dict[str, Any] = {
+                "guid": page.get("guid"),
+                "name": page.get("name", "Page 1"),
+                "widgets": widgets_input,
+            }
+            if page.get("description"):
+                page_input["description"] = page["description"]
+            pages_input.append(page_input)
+
+        dashboard_input: dict[str, Any] = {
+            "name": name if name is not None else entity.get("name", ""),
+            "permissions": entity.get("permissions", "PUBLIC_READ_WRITE"),
+            "pages": pages_input,
+        }
+        new_description = description if description is not None else entity.get("description")
+        if new_description:
+            dashboard_input["description"] = new_description
+
+        mutation = """
+        mutation($guid: EntityGuid!, $dashboard: DashboardInput!) {
+          dashboardUpdate(guid: $guid, dashboard: $dashboard) {
+            entityResult {
+              guid
+              name
+              description
+            }
+            errors {
+              description
+              type
+            }
+          }
+        }
+        """
+
+        extracted = await self._base.execute_mutation(
+            mutation,
+            {"guid": dashboard_guid, "dashboard": dashboard_input},
+            "dashboardUpdate",
+            "update dashboard",
+        )
+        if isinstance(extracted, ApiError):
+            return extracted
+
+        entity_result: dict[str, Any] = extracted.get("entityResult") or {}
+        return {
+            "success": True,
+            "guid": entity_result.get("guid", dashboard_guid),
+            "name": entity_result.get("name"),
+            "description": entity_result.get("description"),
+        }
+
     async def add_widget_to_dashboard(
         self, dashboard_guid: str, widget_config: dict[str, Any]
     ) -> dict[str, Any] | ApiError:

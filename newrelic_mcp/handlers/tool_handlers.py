@@ -18,6 +18,7 @@ from .strategies.alerts import (
     CreateWorkflowHandler,
     DeleteAlertPolicyHandler,
     DeleteMutingRuleHandler,
+    DeleteNotificationChannelHandler,
     DeleteNotificationDestinationHandler,
     DeleteNRQLConditionHandler,
     DeleteWorkflowHandler,
@@ -28,7 +29,9 @@ from .strategies.alerts import (
     ListNotificationDestinationsHandler,
     ListWorkflowsHandler,
     UpdateAlertPolicyHandler,
+    UpdateMutingRuleHandler,
     UpdateNRQLConditionHandler,
+    UpdateWorkflowHandler,
 )
 from .strategies.dashboard import (
     AddWidgetHandler,
@@ -37,6 +40,7 @@ from .strategies.dashboard import (
     DeleteWidgetHandler,
     GetDashboardsHandler,
     GetWidgetsHandler,
+    UpdateDashboardHandler,
     UpdateWidgetHandler,
 )
 from .strategies.entities import (
@@ -85,6 +89,7 @@ class ToolHandlers:
             "get_deployments": DeploymentsHandler(client, config),
             "get_dashboards": GetDashboardsHandler(client, config),
             "create_dashboard": CreateDashboardHandler(client, config),
+            "update_dashboard": UpdateDashboardHandler(client, config),
             "add_widget_to_dashboard": AddWidgetHandler(client, config),
             "get_dashboard_widgets": GetWidgetsHandler(client, config),
             "update_widget": UpdateWidgetHandler(client, config),
@@ -99,10 +104,13 @@ class ToolHandlers:
             "create_notification_destination": CreateNotificationDestinationHandler(client, config),
             "delete_notification_destination": DeleteNotificationDestinationHandler(client, config),
             "create_notification_channel": CreateNotificationChannelHandler(client, config),
+            "delete_notification_channel": DeleteNotificationChannelHandler(client, config),
             "create_workflow": CreateWorkflowHandler(client, config),
+            "update_workflow": UpdateWorkflowHandler(client, config),
             "delete_workflow": DeleteWorkflowHandler(client, config),
             "create_muting_rule": CreateMutingRuleHandler(client, config),
             "list_muting_rules": ListMutingRulesHandler(client, config),
+            "update_muting_rule": UpdateMutingRuleHandler(client, config),
             "delete_muting_rule": DeleteMutingRuleHandler(client, config),
             "list_alert_policies": ListAlertPoliciesHandler(client, config),
             "list_alert_conditions": ListAlertConditionsHandler(client, config),

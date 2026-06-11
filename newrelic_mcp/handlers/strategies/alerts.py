@@ -192,6 +192,7 @@ class UpdateNRQLConditionHandler(ToolHandlerStrategy):
                 threshold_duration=arguments.get("threshold_duration"),
                 description=arguments.get("description"),
                 priority=arguments.get("priority"),
+                aggregation_window=arguments.get("aggregation_window"),
             ),
             f"updating condition '{condition_id}'",
         )
@@ -204,6 +205,33 @@ DeleteNotificationDestinationHandler = make_delete_handler(
     lambda c: c.alerts.delete_notification_destination,
     error_noun="destination",
 )
+
+
+DeleteNotificationChannelHandler = make_delete_handler(
+    "Notification channel",
+    "channel_id",
+    lambda c: c.alerts.delete_notification_channel,
+    error_noun="channel",
+)
+
+
+class UpdateWorkflowHandler(ToolHandlerStrategy):
+    """Handler for updating workflows"""
+
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+        workflow_id = arguments["workflow_id"]
+        self._unwrap(
+            await self.client.alerts.update_workflow(
+                account_id,
+                workflow_id,
+                name=arguments.get("name"),
+                enabled=arguments.get("enabled"),
+                destination_configurations=arguments.get("destination_configurations"),
+                issues_filter=arguments.get("issues_filter"),
+            ),
+            f"updating workflow '{workflow_id}'",
+        )
+        return self._create_success_response(f"Workflow '{workflow_id}' updated successfully.")
 
 
 class DeleteWorkflowHandler(ToolHandlerStrategy):
@@ -336,6 +364,27 @@ class ListMutingRulesHandler(ToolHandlerStrategy):
 
         lines.append("")
         return "\n".join(lines) + "\n"
+
+
+class UpdateMutingRuleHandler(ToolHandlerStrategy):
+    """Handler for updating muting rules"""
+
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+        rule_id = arguments["rule_id"]
+        self._unwrap(
+            await self.client.alerts.update_muting_rule(
+                account_id,
+                rule_id,
+                name=arguments.get("name"),
+                description=arguments.get("description"),
+                enabled=arguments.get("enabled"),
+                condition_operator=arguments.get("condition_operator"),
+                conditions=arguments.get("conditions"),
+                schedule=arguments.get("schedule"),
+            ),
+            f"updating muting rule '{rule_id}'",
+        )
+        return self._create_success_response(f"Muting rule '{rule_id}' updated successfully.")
 
 
 DeleteMutingRuleHandler = make_delete_handler(

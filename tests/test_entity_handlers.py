@@ -7,10 +7,12 @@ import pytest
 from newrelic_mcp.handlers.strategies.entities import (
     AddTagsHandler,
     CreateServiceLevelHandler,
+    DecodeEntityGuidHandler,
     DeleteServiceLevelHandler,
     DeleteTagsHandler,
     DeleteTagValuesHandler,
     EntitySearchHandler,
+    GetEntityHandler,
     GetEntityTagsHandler,
     GetServiceLevelHandler,
     GetSyntheticResultsHandler,
@@ -19,7 +21,7 @@ from newrelic_mcp.handlers.strategies.entities import (
     ReplaceTagsHandler,
     UpdateServiceLevelHandler,
 )
-from newrelic_mcp.types import ApiError, ToolError
+from newrelic_mcp.types import ApiError, DecodedEntityGuid, ToolError
 
 
 class TestEntitySearchHandler:
@@ -376,3 +378,53 @@ class TestGetSyntheticResultsHandler:
         handler = GetSyntheticResultsHandler(mock_client, config)
         with pytest.raises(ToolError, match="failed"):
             await handler.handle({"monitor_guid": "c3luTW9uaXRvcjE="}, "1234567")
+
+
+class TestDecodeEntityGuidHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.base.decode_entity_guid.return_value = DecodedEntityGuid(
+            account_id=9999999, domain="EXT", entity_type="KEY_TRANSACTION", domain_id="123456789"
+        )
+        handler = DecodeEntityGuidHandler(mock_client, config)
+        result = await handler.handle({"guid": "someguid1234"}, "")
+        text = result[0].text
+        assert "9999999" in text
+        assert "EXT" in text
+        assert "KEY_TRANSACTION" in text
+        assert "123456789" in text
+
+    async def test_invalid_guid_returns_error_text(self, mock_client, config):
+        mock_client.base.decode_entity_guid.side_effect = ValueError("not valid base64")
+        handler = DecodeEntityGuidHandler(mock_client, config)
+        result = await handler.handle({"guid": "bad"}, "")
+        assert result[0].text.startswith("Error")
+        assert "not valid base64" in result[0].text
+
+
+class TestGetEntityHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.base.get_entity.return_value = {
+            "guid": "entguid123456",
+            "name": "My App",
+            "domain": "APM",
+            "type": "APPLICATION",
+            "account": {"id": 1234567, "name": "My Account"},
+            "alertSeverity": "NOT_ALERTING",
+            "permalink": "https://one.newrelic.com/redirect",
+            "language": "java",
+            "tags": [{"key": "env", "values": ["prod"]}],
+        }
+        handler = GetEntityHandler(mock_client, config)
+        result = await handler.handle({"guid": "entguid123456"}, "")
+        text = result[0].text
+        assert "My App" in text
+        assert "APM/APPLICATION" in text
+        assert "My Account" in text
+        assert "java" in text
+        assert "env: prod" in text
+
+    async def test_error_propagated(self, mock_client, config):
+        mock_client.base.get_entity.return_value = ApiError("Entity not found")
+        handler = GetEntityHandler(mock_client, config)
+        with pytest.raises(ToolError, match="Entity not found"):
+            await handler.handle({"guid": "entguid123456"}, "")

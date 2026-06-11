@@ -9,6 +9,7 @@ from newrelic_mcp.handlers.strategies.dashboard import (
     DeleteWidgetHandler,
     GetDashboardsHandler,
     GetWidgetsHandler,
+    UpdateDashboardHandler,
     UpdateWidgetHandler,
 )
 from newrelic_mcp.types import ApiError, PaginatedResult, ToolError
@@ -212,3 +213,41 @@ class TestDeleteDashboardHandler:
         handler = DeleteDashboardHandler(mock_client, config)
         with pytest.raises(ToolError, match="not found"):
             await handler.handle({"dashboard_guid": "YmFkR3VpZFRlc3Q="}, "1234567")
+
+
+class TestUpdateDashboardHandler:
+    async def test_success(self, mock_client, config):
+        mock_client.dashboards.update_dashboard.return_value = {
+            "success": True,
+            "guid": "dashguid123456",
+            "name": "New Name",
+        }
+        handler = UpdateDashboardHandler(mock_client, config)
+        result = await handler.handle({"guid": "dashguid123456", "name": "New Name"}, "")
+        assert "New Name" in result[0].text
+        assert "updated successfully" in result[0].text
+        mock_client.dashboards.update_dashboard.assert_called_once_with(
+            "dashguid123456", name="New Name", description=None
+        )
+
+    async def test_description_only(self, mock_client, config):
+        mock_client.dashboards.update_dashboard.return_value = {"success": True, "name": "Existing"}
+        handler = UpdateDashboardHandler(mock_client, config)
+        result = await handler.handle({"guid": "dashguid123456", "description": "New desc"}, "")
+        assert "updated successfully" in result[0].text
+        mock_client.dashboards.update_dashboard.assert_called_once_with(
+            "dashguid123456", name=None, description="New desc"
+        )
+
+    async def test_requires_name_or_description(self, mock_client, config):
+        handler = UpdateDashboardHandler(mock_client, config)
+        result = await handler.handle({"guid": "dashguid123456"}, "")
+        assert result[0].text.startswith("Error")
+        assert "name" in result[0].text and "description" in result[0].text
+        mock_client.dashboards.update_dashboard.assert_not_called()
+
+    async def test_error_propagated(self, mock_client, config):
+        mock_client.dashboards.update_dashboard.return_value = ApiError("not found")
+        handler = UpdateDashboardHandler(mock_client, config)
+        with pytest.raises(ToolError, match="not found"):
+            await handler.handle({"guid": "dashguid123456", "name": "X"}, "")

@@ -679,6 +679,7 @@ class AlertsClient:
         threshold_duration: int | None = None,
         description: str | None = None,
         priority: str | None = None,
+        aggregation_window: int | None = None,
     ) -> dict[str, Any] | ApiError:
         """Update an existing NRQL alert condition (fetch-then-merge for partial updates)."""
         mutation = """
@@ -721,6 +722,8 @@ class AlertsClient:
             condition_config["enabled"] = enabled
         if description is not None:
             condition_config["description"] = description
+        if aggregation_window is not None:
+            condition_config["signal"] = {"aggregationWindow": aggregation_window}
         if needs_term_update:
             condition_config["terms"] = [
                 {
@@ -897,6 +900,76 @@ class AlertsClient:
         except API_ERRORS as e:
             return handle_api_error("get muting rules", e)
 
+    async def update_muting_rule(
+        self,
+        account_id: str,
+        rule_id: str,
+        name: str | None = None,
+        description: str | None = None,
+        enabled: bool | None = None,
+        condition_operator: str | None = None,
+        conditions: list[dict[str, Any]] | None = None,
+        schedule: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | ApiError:
+        """Update an existing muting rule. Only provided fields are sent (the API patches)."""
+        mutation = """
+        mutation($accountId: Int!, $id: ID!, $rule: AlertsMutingRuleUpdateInput!) {
+          alertsMutingRuleUpdate(accountId: $accountId, id: $id, rule: $rule) {
+            id
+            name
+            description
+            enabled
+            condition {
+              operator
+              conditions {
+                attribute
+                operator
+                values
+              }
+            }
+            schedule {
+              startTime
+              endTime
+              timeZone
+              repeat
+              endRepeat
+              weeklyRepeatDays
+            }
+          }
+        }
+        """
+
+        rule_input: dict[str, Any] = {}
+        if name is not None:
+            rule_input["name"] = name
+        if description is not None:
+            rule_input["description"] = description
+        if enabled is not None:
+            rule_input["enabled"] = enabled
+        if conditions is not None or condition_operator is not None:
+            rule_input["condition"] = {
+                "operator": condition_operator or "AND",
+                "conditions": conditions or [],
+            }
+        if schedule is not None:
+            rule_input["schedule"] = schedule
+
+        rule_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "id": rule_id, "rule": rule_input},
+            "alertsMutingRuleUpdate",
+            "update muting rule",
+        )
+        if isinstance(rule_result, ApiError):
+            return rule_result
+
+        return format_create_response(
+            rule_result,
+            name="name",
+            enabled="enabled",
+            schedule="schedule",
+        )
+
     async def delete_muting_rule(self, account_id: str, rule_id: str) -> dict[str, Any] | ApiError:
         """Delete a muting rule"""
         mutation = """
@@ -918,6 +991,102 @@ class AlertsClient:
             "id": delete_result.get("id"),
             "message": f"Muting rule '{rule_id}' deleted successfully",
         }
+
+    async def update_workflow(
+        self,
+        account_id: str,
+        workflow_id: str,
+        name: str | None = None,
+        enabled: bool | None = None,
+        destination_configurations: list[dict[str, Any]] | None = None,
+        issues_filter: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | ApiError:
+        """Update an existing workflow. Only provided fields are sent."""
+        mutation = """
+        mutation($accountId: Int!, $updateWorkflowData: AiWorkflowsUpdateWorkflowInput!) {
+          aiWorkflowsUpdateWorkflow(accountId: $accountId, updateWorkflowData: $updateWorkflowData) {
+            workflow {
+              id
+              name
+              destinationConfigurations {
+                channelId
+                name
+                type
+              }
+              issuesFilter {
+                name
+                predicates {
+                  attribute
+                  operator
+                  values
+                }
+                type
+              }
+            }
+            errors {
+              description
+              type
+            }
+          }
+        }
+        """
+
+        update_data: dict[str, Any] = {"id": workflow_id}
+        if name is not None:
+            update_data["name"] = name
+        if enabled is not None:
+            update_data["workflowEnabled"] = enabled
+        if destination_configurations is not None:
+            update_data["destinationConfigurations"] = destination_configurations
+        if issues_filter is not None:
+            update_data["issuesFilter"] = issues_filter
+
+        update_result = await self._base.execute_mutation(
+            mutation,
+            {"accountId": int(account_id), "updateWorkflowData": update_data},
+            "aiWorkflowsUpdateWorkflow",
+            "update workflow",
+        )
+        if isinstance(update_result, ApiError):
+            return update_result
+
+        workflow = update_result.get("workflow", {})
+        return format_create_response(
+            workflow,
+            name="name",
+            destination_configurations="destinationConfigurations",
+            issues_filter="issuesFilter",
+        )
+
+    async def delete_notification_channel(self, account_id: str, channel_id: str) -> dict[str, Any] | ApiError:
+        """Delete a notification channel"""
+        mutation = """
+        mutation($accountId: Int!, $channelId: ID!) {
+          aiNotificationsDeleteChannel(accountId: $accountId, channelId: $channelId) {
+            ids
+            error {
+              details
+            }
+          }
+        }
+        """
+
+        try:
+            result = await self._base.execute_graphql(mutation, {"accountId": int(account_id), "channelId": channel_id})
+
+            delete_result = result.get("data", {}).get("aiNotificationsDeleteChannel", {})
+            error = delete_result.get("error")
+            if error:
+                return ApiError(f"Channel deletion failed: {error.get('details', 'Unknown error')}")
+
+            return {
+                "success": True,
+                "id": channel_id,
+                "message": "Notification channel deleted successfully",
+            }
+
+        except API_ERRORS as e:
+            return handle_api_error("delete notification channel", e)
 
     async def delete_workflow(
         self, account_id: str, workflow_id: str, delete_channels: bool = True

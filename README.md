@@ -12,7 +12,7 @@ A comprehensive Model Context Protocol (MCP) server for New Relic monitoring, ob
 
 ### Core Monitoring & Observability
 - **NRQL Query Execution**: Run custom New Relic Query Language queries
-- **Application Performance**: Real-time performance metrics (response time, throughput, Apdex)
+- **Application Performance**: Real-time performance metrics (response time, throughput)
 - **Error Monitoring**: Error rates, counts, and detailed error analysis
 - **Infrastructure Monitoring**: Host metrics, CPU, memory, disk usage
 - **Incident Management**: Recent incidents, violations, and alert status
@@ -129,13 +129,12 @@ export NEW_RELIC_ACCOUNT_ID="your-account-id"
 export NEW_RELIC_REGION="US"  # US or EU
 export NEW_RELIC_TIMEOUT="30"
 ```
-```
 
 ## Available Tools
 
 ### NRQL & Monitoring
 - **`query_nrql`**: Execute custom NRQL queries with full flexibility
-- **`get_app_performance`**: Application performance metrics (avg/p95 response time, throughput, Apdex)
+- **`get_app_performance`**: Application performance metrics (avg/p95 response time, throughput)
 - **`get_app_errors`**: Error metrics, counts, and error analysis
 - **`get_incidents`**: Recent incidents with time filtering
 - **`get_infrastructure_hosts`**: Infrastructure host metrics (CPU, memory, disk)
@@ -146,6 +145,7 @@ export NEW_RELIC_TIMEOUT="30"
 - **`get_dashboards`**: List and search dashboards with filtering
 - **`get_dashboard_widgets`**: Retrieve all widgets from a dashboard
 - **`create_dashboard`**: Create new dashboards for monitoring
+- **`update_dashboard`**: Rename a dashboard and/or update its description (pages and widgets preserved)
 - **`delete_dashboard`**: Delete a dashboard by GUID
 - **`add_widget_to_dashboard`**: Add custom NRQL-based widgets
 - **`update_widget`**: Update existing dashboard widgets
@@ -161,6 +161,10 @@ export NEW_RELIC_TIMEOUT="30"
 - **`delete_tags_from_entity`**: Remove tag keys from an entity
 - **`delete_tag_values`**: Delete specific tag key-value pairs from an entity
 - **`list_service_levels`**: List all SLIs/SLOs with compliance data and objectives
+- **`get_service_level`**: Get full SLI definitions (event queries, objectives, time windows) for an entity
+- **`create_service_level`**: Create a Service Level Indicator on an entity
+- **`update_service_level`**: Update an SLI's name, description, event queries, or objectives
+- **`delete_service_level`**: Delete an SLI by its SERVICE_LEVEL entity GUID
 - **`list_synthetic_monitors`**: List all synthetic monitors with status, success rate, and location health
 - **`get_synthetic_results`**: Get recent pass/fail check results per location for a specific monitor
 
@@ -174,8 +178,14 @@ export NEW_RELIC_TIMEOUT="30"
 - **`create_notification_destination`**: Set up notification endpoints (email, Slack, webhook, PagerDuty)
 - **`delete_notification_destination`**: Delete a notification destination by ID
 - **`create_notification_channel`**: Create notification channels
+- **`delete_notification_channel`**: Delete a notification channel by ID
 - **`create_workflow`**: Connect alerts to notifications with filtering
+- **`update_workflow`**: Update a workflow's name, enabled state, channels, or issues filter
 - **`delete_workflow`**: Delete a workflow by ID
+- **`create_muting_rule`**: Create a muting rule to suppress alert notifications during scheduled windows
+- **`list_muting_rules`**: List all muting rules with their conditions and schedules
+- **`update_muting_rule`**: Update a muting rule's name, conditions, schedule, or enabled state
+- **`delete_muting_rule`**: Delete a muting rule by ID
 - **`list_alert_policies`**: List all alert policies
 - **`list_alert_conditions`**: List alert conditions with optional filters by policy, name, or NRQL query
 - **`list_notification_destinations`**: List all notification destinations
@@ -213,34 +223,46 @@ Access structured data through these MCP resources:
 
 ## Docker Support
 
-### Quick Docker Run
+### Build
 ```bash
 docker build -t newrelic-mcp-server .
-
-docker run -e NEW_RELIC_API_KEY=your-key \
-           -e NEW_RELIC_ACCOUNT_ID=your-id \
-           newrelic-mcp-server
 ```
 
-### Docker Compose (Recommended)
-```bash
-# Setup environment
-cp .env.example .env
-# Edit .env with your New Relic credentials
+### MCP Client Integration (Recommended)
+The server speaks MCP over stdio, so your MCP client should launch the container itself with
+`docker run -i --rm` (interactive stdin, removed on exit):
 
-# Build and run
-docker-compose up --build
-
-# Run in background
-docker-compose up -d --build
+```json
+{
+  "mcpServers": {
+    "newrelic": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "NEW_RELIC_API_KEY",
+        "-e", "NEW_RELIC_ACCOUNT_ID",
+        "newrelic-mcp-server"
+      ],
+      "env": {
+        "NEW_RELIC_API_KEY": "your-api-key",
+        "NEW_RELIC_ACCOUNT_ID": "your-account-id"
+      }
+    }
+  }
+}
 ```
 
-### Production Deployment
-The Docker image uses:
-- **Multi-stage build** for optimized image size
-- **Non-root user** for security
-- **Volume mounts** for configuration and logs
-- **Health checks** for container monitoring
+A `docker-compose.yml` is included, but compose keeps an idle long-running container —
+since MCP clients spawn the server on demand, prefer the `docker run -i --rm` client
+config above. Compose is mainly useful for keeping a pre-built image and env wiring
+around during development.
+
+### Image Details
+The Dockerfile is a single-stage build on `python:3.11-slim` that:
+- installs locked dependencies with `uv sync --frozen` (dependency layer cached separately from source)
+- copies the application source and installs the project
+- runs as a non-root `mcp` user
+- starts the stdio server via `uv run python server.py` (no ports exposed — communication is over stdin/stdout)
 
 ## Development
 

@@ -4,6 +4,7 @@ Base New Relic API client.
 Provides common HTTP client functionality and NRQL query capabilities.
 """
 
+import asyncio
 import base64
 import logging
 from typing import Any
@@ -27,6 +28,20 @@ _NRQL_ERROR_HINTS: dict[str, str] = {
     "NRDB:1107004": "Invalid function. Check the NRQL function name and argument types.",
 }
 
+_RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
+_MAX_ATTEMPTS = 3
+_MAX_RETRY_WAIT_SECONDS = 10.0
+_DEBUG_LOG_MAX_CHARS = 2000
+
+
+def _retry_wait_seconds(retry_after: str | None, attempt: int) -> float:
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 0.0), _MAX_RETRY_WAIT_SECONDS)
+        except ValueError:
+            pass
+    return min(0.5 * (2.0 ** (attempt - 1)), _MAX_RETRY_WAIT_SECONDS)
+
 
 class BaseNewRelicClient:
     """Base client for interacting with New Relic APIs"""
@@ -47,9 +62,32 @@ class BaseNewRelicClient:
         """Close the underlying HTTP client."""
         await self._http_client.aclose()
 
+    async def _post_with_retry(self, payload: dict[str, Any]) -> httpx.Response:
+        """POST to /graphql, retrying rate-limit and transient gateway errors with backoff."""
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            try:
+                response = await self._http_client.post("/graphql", json=payload)
+            except httpx.TimeoutException as e:
+                raise ValueError(
+                    f"request timed out after {self.config.effective_timeout}s — "
+                    "increase NEW_RELIC_TIMEOUT or narrow the query"
+                ) from e
+            if response.status_code not in _RETRYABLE_STATUS_CODES or attempt == _MAX_ATTEMPTS:
+                return response
+            wait = _retry_wait_seconds(response.headers.get("Retry-After"), attempt)
+            logger.warning(
+                "HTTP %s from NerdGraph, retrying in %.1fs (attempt %d/%d)",
+                response.status_code,
+                wait,
+                attempt,
+                _MAX_ATTEMPTS,
+            )
+            await asyncio.sleep(wait)
+        raise RuntimeError("unreachable")
+
     async def _execute_http_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Execute HTTP request with common error handling"""
-        response = await self._http_client.post("/graphql", json=payload)
+        response = await self._post_with_retry(payload)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
 
@@ -111,7 +149,7 @@ class BaseNewRelicClient:
 
         logger.debug("Executing NRQL query: %s", query)
         result = await self._execute_http_request(graphql_query)
-        logger.debug("Query result: %s", result)
+        logger.debug("Query result: %s", str(result)[:_DEBUG_LOG_MAX_CHARS])
         return result
 
     @staticmethod

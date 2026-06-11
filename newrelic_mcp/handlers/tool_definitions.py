@@ -107,6 +107,81 @@ Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for p
 Note: logarithmic scale is not supported by New Relic for line/area charts."""
 
 
+_MUTING_RULE_CONDITIONS_SCHEMA: dict[str, Any] = {
+    "type": "array",
+    "description": "Conditions that define which alerts to mute",
+    "items": {
+        "type": "object",
+        "properties": {
+            "attribute": {
+                "type": "string",
+                "description": "Alert attribute (policyId, policyName, conditionId, conditionName, entity.name, entity.type)",
+            },
+            "operator": {
+                "type": "string",
+                "description": "Comparison operator",
+                "enum": [
+                    "EQUALS",
+                    "NOT_EQUALS",
+                    "IN",
+                    "NOT_IN",
+                    "CONTAINS",
+                    "DOES_NOT_CONTAIN",
+                    "ENDS_WITH",
+                    "NOT_ENDS_WITH",
+                    "STARTS_WITH",
+                    "NOT_STARTS_WITH",
+                    "IS_BLANK",
+                    "IS_NOT_BLANK",
+                    "ANY",
+                ],
+            },
+            "values": {
+                "type": "array",
+                "description": "Values to match against",
+                "items": {"type": "string"},
+            },
+        },
+        "required": ["attribute", "operator", "values"],
+    },
+}
+
+_MUTING_RULE_SCHEDULE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": "Schedule for recurring muting (optional). startTime/endTime format: ISO 8601 (e.g. 2026-04-01T03:00:00)",
+    "properties": {
+        "startTime": {"type": "string", "description": "Start time (ISO 8601)"},
+        "endTime": {"type": "string", "description": "End time (ISO 8601)"},
+        "timeZone": {"type": "string", "description": "Time zone (e.g. America/New_York)"},
+        "repeat": {
+            "type": "string",
+            "description": "Recurrence (DAILY, WEEKLY, MONTHLY)",
+            "enum": ["DAILY", "WEEKLY", "MONTHLY"],
+        },
+        "endRepeat": {
+            "type": "string",
+            "description": "When to stop repeating (ISO 8601, optional)",
+        },
+        "weeklyRepeatDays": {
+            "type": "array",
+            "description": "Days for WEEKLY repeat",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "MONDAY",
+                    "TUESDAY",
+                    "WEDNESDAY",
+                    "THURSDAY",
+                    "FRIDAY",
+                    "SATURDAY",
+                    "SUNDAY",
+                ],
+            },
+        },
+    },
+}
+
+
 def _hours_property(default: int) -> dict[str, Any]:
     return {
         "type": "integer",
@@ -306,6 +381,21 @@ def get_dashboard_tools() -> list[Tool]:
                     "description": {"type": "string", "description": "Description of the dashboard (optional)"},
                 },
                 "required": ["name"],
+            },
+        ),
+        Tool(
+            name="update_dashboard",
+            description=(
+                "Rename a dashboard and/or update its description by GUID. Pages and widgets are preserved unchanged."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {"type": "string", "description": "GUID of the dashboard to update"},
+                    "name": {"type": "string", "description": "New dashboard name (optional)"},
+                    "description": {"type": "string", "description": "New dashboard description (optional)"},
+                },
+                "required": ["guid"],
             },
         ),
         Tool(
@@ -618,6 +708,12 @@ def get_alert_tools() -> list[Tool]:
                         "description": "New alert priority (optional) — NerdGraph accepts only CRITICAL or WARNING",
                         "enum": ["CRITICAL", "WARNING"],
                     },
+                    "aggregation_window": {
+                        "type": "integer",
+                        "description": "New aggregation window in seconds (30-1200, optional)",
+                        "minimum": 30,
+                        "maximum": 1200,
+                    },
                 },
                 "required": ["condition_id"],
             },
@@ -642,6 +738,75 @@ def get_alert_tools() -> list[Tool]:
                     "destination_id": {"type": "string", "description": "ID of the destination to delete"},
                 },
                 "required": ["destination_id"],
+            },
+        ),
+        Tool(
+            name="delete_notification_channel",
+            description="Delete a notification channel by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "channel_id": {"type": "string", "description": "ID of the notification channel to delete"},
+                },
+                "required": ["channel_id"],
+            },
+        ),
+        Tool(
+            name="update_workflow",
+            description=(
+                "Update an existing workflow. Only the provided fields are changed. "
+                "Use destination_configurations to replace the notification channels and "
+                "issues_filter to replace the filter."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "workflow_id": {"type": "string", "description": "ID of the workflow to update"},
+                    "name": {"type": "string", "description": "New name (optional)"},
+                    "enabled": {"type": "boolean", "description": "Enable or disable the workflow (optional)"},
+                    "destination_configurations": {
+                        "type": "array",
+                        "description": "New destination configurations as [{channelId}] (optional, replaces existing)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "channelId": {"type": "string", "description": "Notification channel ID"},
+                            },
+                            "required": ["channelId"],
+                        },
+                    },
+                    "issues_filter": {
+                        "type": "object",
+                        "description": "New issues filter as {name, type, predicates} (optional, replaces existing)",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "type": {"type": "string", "enum": ["FILTER", "VIEW"]},
+                            "predicates": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "attribute": {"type": "string"},
+                                        "operator": {
+                                            "type": "string",
+                                            "enum": [
+                                                "EQUAL",
+                                                "NOT_EQUAL",
+                                                "IN",
+                                                "NOT_IN",
+                                                "CONTAINS",
+                                                "DOES_NOT_CONTAIN",
+                                            ],
+                                        },
+                                        "values": {"type": "array", "items": {"type": "string"}},
+                                    },
+                                    "required": ["attribute", "operator", "values"],
+                                },
+                            },
+                        },
+                    },
+                },
+                "required": ["workflow_id"],
             },
         ),
         Tool(
@@ -684,80 +849,37 @@ def get_alert_tools() -> list[Tool]:
                         "default": "AND",
                         "enum": ["AND", "OR"],
                     },
-                    "conditions": {
-                        "type": "array",
-                        "description": "Conditions that define which alerts to mute",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "attribute": {
-                                    "type": "string",
-                                    "description": "Alert attribute (policyId, policyName, conditionId, conditionName, entity.name, entity.type)",
-                                },
-                                "operator": {
-                                    "type": "string",
-                                    "description": "Comparison operator",
-                                    "enum": [
-                                        "EQUALS",
-                                        "NOT_EQUALS",
-                                        "IN",
-                                        "NOT_IN",
-                                        "CONTAINS",
-                                        "DOES_NOT_CONTAIN",
-                                        "ENDS_WITH",
-                                        "NOT_ENDS_WITH",
-                                        "STARTS_WITH",
-                                        "NOT_STARTS_WITH",
-                                        "IS_BLANK",
-                                        "IS_NOT_BLANK",
-                                        "ANY",
-                                    ],
-                                },
-                                "values": {
-                                    "type": "array",
-                                    "description": "Values to match against",
-                                    "items": {"type": "string"},
-                                },
-                            },
-                            "required": ["attribute", "operator", "values"],
-                        },
-                    },
-                    "schedule": {
-                        "type": "object",
-                        "description": "Schedule for recurring muting (optional). startTime/endTime format: ISO 8601 (e.g. 2026-04-01T03:00:00)",
-                        "properties": {
-                            "startTime": {"type": "string", "description": "Start time (ISO 8601)"},
-                            "endTime": {"type": "string", "description": "End time (ISO 8601)"},
-                            "timeZone": {"type": "string", "description": "Time zone (e.g. America/New_York)"},
-                            "repeat": {
-                                "type": "string",
-                                "description": "Recurrence (DAILY, WEEKLY, MONTHLY)",
-                                "enum": ["DAILY", "WEEKLY", "MONTHLY"],
-                            },
-                            "endRepeat": {
-                                "type": "string",
-                                "description": "When to stop repeating (ISO 8601, optional)",
-                            },
-                            "weeklyRepeatDays": {
-                                "type": "array",
-                                "description": "Days for WEEKLY repeat",
-                                "items": {
-                                    "type": "string",
-                                    "enum": [
-                                        "MONDAY",
-                                        "TUESDAY",
-                                        "WEDNESDAY",
-                                        "THURSDAY",
-                                        "FRIDAY",
-                                        "SATURDAY",
-                                        "SUNDAY",
-                                    ],
-                                },
-                            },
-                        },
-                    },
+                    "conditions": _MUTING_RULE_CONDITIONS_SCHEMA,
+                    "schedule": _MUTING_RULE_SCHEDULE_SCHEMA,
                 },
                 "required": ["name", "conditions"],
+            },
+        ),
+        Tool(
+            name="update_muting_rule",
+            description=(
+                "Update an existing muting rule. Only the provided fields are changed; "
+                "condition and schedule shapes match create_muting_rule."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "rule_id": {"type": "string", "description": "ID of the muting rule to update"},
+                    "name": {"type": "string", "description": "New name (optional)"},
+                    "description": {"type": "string", "description": "New description (optional)"},
+                    "enabled": {"type": "boolean", "description": "Enable or disable the rule (optional)"},
+                    "condition_operator": {
+                        "type": "string",
+                        "description": "Logical operator for combining conditions (optional)",
+                        "enum": ["AND", "OR"],
+                    },
+                    "conditions": {
+                        **_MUTING_RULE_CONDITIONS_SCHEMA,
+                        "description": "New conditions defining which alerts to mute (optional, replaces existing)",
+                    },
+                    "schedule": _MUTING_RULE_SCHEDULE_SCHEMA,
+                },
+                "required": ["rule_id"],
             },
         ),
         Tool(
