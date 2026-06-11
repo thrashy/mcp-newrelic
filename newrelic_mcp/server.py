@@ -9,6 +9,7 @@ import logging
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from mcp.types import TextContent
 
 from .client import NewRelicClient
 from .config import NewRelicConfig
@@ -69,10 +70,10 @@ class NewRelicMCPServer:
             """Handle tool calls"""
             if not self.client:
                 return [
-                    {
-                        "type": "text",
-                        "text": "Error: New Relic client not configured. Provide credentials via config file, command line, or environment variables.",
-                    }
+                    TextContent(
+                        type="text",
+                        text="Error: New Relic client not configured. Provide credentials via config file, command line, or environment variables.",
+                    )
                 ]
 
             return await self.tool_handlers.handle_tool_call(name, arguments)

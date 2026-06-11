@@ -22,13 +22,13 @@ class TestValidateNrqlQuery:
         with pytest.raises(ValidationError, match="long"):
             InputValidator.validate_nrql_query("SELECT " + "x" * 10000)
 
-    def test_rejects_drop_pattern(self):
-        with pytest.raises(ValidationError, match="dangerous"):
-            InputValidator.validate_nrql_query("SELECT 1; DROP TABLE foo")
+    def test_accepts_from_first_form(self):
+        result = InputValidator.validate_nrql_query("FROM Transaction SELECT count(*)")
+        assert result == "FROM Transaction SELECT count(*)"
 
-    def test_rejects_script_tag(self):
-        with pytest.raises(ValidationError, match="dangerous"):
-            InputValidator.validate_nrql_query("SELECT <script>alert(1)</script>")
+    def test_rejects_non_query_text(self):
+        with pytest.raises(ValidationError, match="must start with SELECT or FROM"):
+            InputValidator.validate_nrql_query("SHOW EVENT TYPES")
 
     def test_strips_whitespace(self):
         result = InputValidator.validate_nrql_query("  SELECT 1 FROM Transaction  ")

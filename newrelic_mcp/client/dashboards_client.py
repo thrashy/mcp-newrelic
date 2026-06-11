@@ -390,10 +390,11 @@ class DashboardsClient:
                     "Use delete_dashboard to remove the entire dashboard instead."
                 )
 
-            # Update the page with remaining widgets
+            # dashboardUpdateWidgetsInPage cannot remove widgets — only dashboardUpdatePage
+            # replaces the full widget set, dropping any widget omitted from it.
             update_mutation = """
-            mutation($guid: EntityGuid!, $widgets: [DashboardUpdateWidgetInput!]!) {
-              dashboardUpdateWidgetsInPage(guid: $guid, widgets: $widgets) {
+            mutation($guid: EntityGuid!, $page: DashboardUpdatePageInput!) {
+              dashboardUpdatePage(guid: $guid, page: $page) {
                 errors {
                   description
                   type
@@ -401,12 +402,16 @@ class DashboardsClient:
               }
             }
             """
-            update_result = await self._base.execute_graphql(
-                update_mutation, {"guid": page_guid, "widgets": remaining_widgets}
-            )
+            page_input: dict[str, Any] = {
+                "name": target_page.get("name", "Page 1"),
+                "widgets": remaining_widgets,
+            }
+            if target_page.get("description"):
+                page_input["description"] = target_page["description"]
+            update_result = await self._base.execute_graphql(update_mutation, {"guid": page_guid, "page": page_input})
 
             extracted = self._base._extract_mutation_result(
-                update_result, "dashboardUpdateWidgetsInPage", error_message="Widget deletion failed"
+                update_result, "dashboardUpdatePage", error_message="Widget deletion failed"
             )
             if isinstance(extracted, ApiError):
                 return extracted

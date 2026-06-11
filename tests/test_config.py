@@ -5,6 +5,8 @@ import json
 import os
 import tempfile
 
+import pytest
+
 from newrelic_mcp.config.newrelic_config import NewRelicConfig
 
 
@@ -59,10 +61,9 @@ class TestFromFile:
         assert cfg.region == "EU"
         assert cfg.timeout == 45
 
-    def test_missing_file_returns_empty_config(self):
-        cfg = NewRelicConfig.from_file("/nonexistent/path.json")
-        assert cfg.api_key is None
-        assert cfg.account_id is None
+    def test_missing_file_raises(self):
+        with pytest.raises(FileNotFoundError):
+            NewRelicConfig.from_file("/nonexistent/path.json")
 
     def test_partial_file_leaves_missing_as_none(self):
         data = {"api_key": "NRAK-partial"}

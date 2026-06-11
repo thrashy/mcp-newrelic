@@ -1,5 +1,6 @@
 """Monitoring tool handlers using Strategy pattern"""
 
+import json
 from typing import Any
 
 from mcp.types import TextContent
@@ -14,7 +15,11 @@ class QueryNRQLHandler(ToolHandlerStrategy):
     async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         query = InputValidator.validate_nrql_query(arguments["query"])
         result = await self.client.query_nrql(account_id, query)
-        return [TextContent(type="text", text=f"NRQL Query Results:\n```json\n{result}\n```")]
+        return [
+            TextContent(
+                type="text", text=f"NRQL Query Results:\n```json\n{json.dumps(result, indent=2, default=str)}\n```"
+            )
+        ]
 
 
 class AppPerformanceHandler(ToolHandlerStrategy):

@@ -41,10 +41,6 @@ class CreateNRQLConditionHandler(ToolHandlerStrategy):
         aggregation_window = arguments.get("aggregation_window", 60)
         description = arguments.get("description")
 
-        # Map HIGH/MEDIUM/LOW to WARNING since API only accepts CRITICAL/WARNING
-        if priority in ["HIGH", "MEDIUM", "LOW"]:
-            priority = "WARNING"
-
         result = self._unwrap(
             await self.client.alerts.create_nrql_condition(
                 account_id,
@@ -318,7 +314,7 @@ class CreateMutingRuleHandler(ToolHandlerStrategy):
         description = arguments.get("description")
         enabled = arguments.get("enabled", True)
         condition_operator = arguments.get("condition_operator", "AND")
-        conditions = arguments.get("conditions", [])
+        conditions = arguments["conditions"]
         schedule = arguments.get("schedule")
 
         result = self._unwrap(

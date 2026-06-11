@@ -321,7 +321,7 @@ class EntitiesClient:
         except API_ERRORS as e:
             return handle_api_error(operation, e)
 
-    async def get_service_level(self, guid: str) -> list[dict[str, Any]] | ApiError:
+    async def get_service_level(self, guid: str, _resolve_associated: bool = True) -> list[dict[str, Any]] | ApiError:
         """Get full SLI definitions (events, objectives) for an entity.
 
         Accepts either the GUID of the entity the SLIs are attached to, or the
@@ -348,11 +348,11 @@ class EntitiesClient:
             result = await self._base.execute_graphql(query, {"guid": guid})
             entity = result.get("data", {}).get("actor", {}).get("entity") or {}
             indicators = (entity.get("serviceLevel") or {}).get("indicators") or []
-            if not indicators:
+            if not indicators and _resolve_associated:
                 tags = {t["key"]: t["values"] for t in entity.get("tags", [])}
                 associated = tags.get("nr.associatedEntityGuid")
                 if associated and associated[0] != guid:
-                    return await self.get_service_level(associated[0])
+                    return await self.get_service_level(associated[0], _resolve_associated=False)
             return indicators
         except API_ERRORS as e:
             return handle_api_error("get service level", e)

@@ -11,6 +11,15 @@ import os
 from pathlib import Path
 
 
+def _parse_timeout(value: int | str | None) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"Invalid New Relic timeout {value!r} — expected an integer number of seconds") from e
+
+
 class NewRelicConfig:
     """Configuration for New Relic MCP Server"""
 
@@ -23,7 +32,10 @@ class NewRelicConfig:
     @property
     def effective_region(self) -> str:
         """Resolved region, defaulting to US if not set"""
-        return self.region or "US"
+        region = (self.region or "US").upper()
+        if region not in ("US", "EU"):
+            raise ValueError(f"Invalid New Relic region {self.region!r} — expected US or EU")
+        return region
 
     @property
     def effective_timeout(self) -> int:
@@ -34,13 +46,14 @@ class NewRelicConfig:
     def from_file(cls, config_path: str) -> "NewRelicConfig":
         """Load configuration from JSON file"""
         config = cls()
-        if Path(config_path).exists():
-            with open(config_path, encoding="utf-8") as f:
-                data = json.load(f)
-                config.api_key = data.get("api_key")
-                config.account_id = data.get("account_id")
-                config.region = data.get("region")
-                config.timeout = data.get("timeout")
+        if not Path(config_path).exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+        with open(config_path, encoding="utf-8") as f:
+            data = json.load(f)
+            config.api_key = data.get("api_key")
+            config.account_id = data.get("account_id")
+            config.region = data.get("region")
+            config.timeout = _parse_timeout(data.get("timeout"))
         return config
 
     @classmethod
@@ -63,8 +76,7 @@ class NewRelicConfig:
         config.api_key = os.getenv("NEW_RELIC_API_KEY")
         config.account_id = os.getenv("NEW_RELIC_ACCOUNT_ID")
         config.region = os.getenv("NEW_RELIC_REGION")
-        timeout_str = os.getenv("NEW_RELIC_TIMEOUT")
-        config.timeout = int(timeout_str) if timeout_str else None
+        config.timeout = _parse_timeout(os.getenv("NEW_RELIC_TIMEOUT"))
         return config
 
     def merge_with(self, other: "NewRelicConfig") -> "NewRelicConfig":

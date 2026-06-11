@@ -404,8 +404,10 @@ Note: logarithmic scale is not supported by New Relic for line/area charts.""",
                     "widget_query": {"type": "string", "description": "New NRQL query for the widget"},
                     "widget_type": {
                         "type": "string",
-                        "description": "New widget type (line, area, bar, pie, table, billboard, etc.)",
-                        "default": "line",
+                        "description": (
+                            "New widget type (line, area, bar, pie, table, billboard, etc.). "
+                            "Omit to keep the widget's current visualization."
+                        ),
                     },
                     "raw_configuration": {
                         "type": "object",
@@ -510,9 +512,9 @@ def get_alert_tools() -> list[Tool]:
                     },
                     "priority": {
                         "type": "string",
-                        "description": "Alert priority (CRITICAL, HIGH, MEDIUM, LOW)",
+                        "description": "Alert priority — NerdGraph accepts only CRITICAL or WARNING",
                         "default": "CRITICAL",
-                        "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                        "enum": ["CRITICAL", "WARNING"],
                     },
                     "aggregation_window": {
                         "type": "integer",
@@ -664,8 +666,8 @@ def get_alert_tools() -> list[Tool]:
                     },
                     "priority": {
                         "type": "string",
-                        "description": "New alert priority (optional)",
-                        "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+                        "description": "New alert priority (optional) — NerdGraph accepts only CRITICAL or WARNING",
+                        "enum": ["CRITICAL", "WARNING"],
                     },
                 },
                 "required": ["condition_id"],

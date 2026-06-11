@@ -31,9 +31,11 @@ class BaseNewRelicClient:
     """Base client for interacting with New Relic APIs"""
 
     def __init__(self, config: NewRelicConfig):
+        if not config.api_key:
+            raise ValueError("New Relic API key is required to construct a client")
         self.config = config
         self.base_url = "https://api.newrelic.com" if config.effective_region == "US" else "https://api.eu.newrelic.com"
-        self.headers: dict[str, str] = {"Api-Key": config.api_key or "", "Content-Type": "application/json"}
+        self.headers: dict[str, str] = {"Api-Key": config.api_key, "Content-Type": "application/json"}
         self._http_client = httpx.AsyncClient(
             base_url=self.base_url,
             headers=self.headers,
@@ -173,7 +175,7 @@ class BaseNewRelicClient:
             if not entity:
                 return ApiError(f"Entity not found for GUID: {guid}")
             return entity
-        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+        except (httpx.HTTPError, ValueError) as e:
             return ApiError(f"Failed to get entity: {e}")
 
     async def execute_graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -200,7 +200,7 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
         widget_id = arguments["widget_id"]
         widget_title = arguments.get("widget_title")
         widget_query = arguments.get("widget_query")
-        widget_type = arguments.get("widget_type", "line")
+        widget_type = arguments.get("widget_type")
         raw_configuration = arguments.get("raw_configuration")
         layout = arguments.get("layout")
 
@@ -214,8 +214,8 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
             widget_config["layout"] = layout
 
         if widget_query:
-            widget_config["configuration"] = build_widget_configuration(widget_type, account_id, widget_query)
-            widget_config["visualization"] = {"id": f"viz.{widget_type}"}
+            widget_config["configuration"] = build_widget_configuration(widget_type or "line", account_id, widget_query)
+            widget_config["visualization"] = {"id": f"viz.{widget_type or 'line'}"}
             # NerdGraph update requires rawConfiguration alongside typed configuration
             if raw_configuration is None:
                 raw_configuration = {}
@@ -227,7 +227,9 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
 
         if raw_configuration is not None:
             widget_config["rawConfiguration"] = raw_configuration
-            if "visualization" not in widget_config:
+            # Only force a visualization when explicitly requested — otherwise a
+            # raw-configuration-only tweak would convert the widget to viz.line.
+            if "visualization" not in widget_config and widget_type:
                 widget_config["visualization"] = {"id": f"viz.{widget_type}"}
 
         self._unwrap(

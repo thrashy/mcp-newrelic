@@ -22,17 +22,6 @@ class AlertsClient:
     def __init__(self, base: BaseNewRelicClient):
         self._base = base
 
-    async def _query_entities(
-        self, query: str, account_id: str, data_path: list[str], items_key: str = "entities"
-    ) -> PaginatedResult:
-        """Execute a GraphQL query and wrap results as PaginatedResult."""
-        result = await self._base.execute_graphql(query, {"accountId": int(account_id)})
-        data = extract_nested_data(result, data_path)
-        return PaginatedResult(
-            items=data.get(items_key, []),
-            total_count=data.get("totalCount", 0),
-        )
-
     async def create_alert_policy(
         self, account_id: str, name: str, incident_preference: str = "PER_POLICY"
     ) -> dict[str, Any] | ApiError:
@@ -448,11 +437,11 @@ class AlertsClient:
     async def get_destinations(self, account_id: str) -> PaginatedResult | ApiError:
         """Get notification destinations"""
         query = """
-        query($accountId: Int!) {
+        query($accountId: Int!, $cursor: String) {
           actor {
             account(id: $accountId) {
               aiNotifications {
-                destinations {
+                destinations(cursor: $cursor) {
                   entities {
                     id
                     name
@@ -474,8 +463,11 @@ class AlertsClient:
         """
 
         try:
-            return await self._query_entities(
-                query, account_id, ["data", "actor", "account", "aiNotifications", "destinations"]
+            return await self._base.paginate_graphql(
+                query,
+                {"accountId": int(account_id)},
+                ["data", "actor", "account", "aiNotifications", "destinations"],
+                "entities",
             )
         except API_ERRORS as e:
             return handle_api_error("get destinations", e)
@@ -483,11 +475,11 @@ class AlertsClient:
     async def get_notification_channels(self, account_id: str) -> PaginatedResult | ApiError:
         """Get notification channels"""
         query = """
-        query($accountId: Int!) {
+        query($accountId: Int!, $cursor: String) {
           actor {
             account(id: $accountId) {
               aiNotifications {
-                channels {
+                channels(cursor: $cursor) {
                   entities {
                     id
                     name
@@ -511,8 +503,11 @@ class AlertsClient:
         """
 
         try:
-            return await self._query_entities(
-                query, account_id, ["data", "actor", "account", "aiNotifications", "channels"]
+            return await self._base.paginate_graphql(
+                query,
+                {"accountId": int(account_id)},
+                ["data", "actor", "account", "aiNotifications", "channels"],
+                "entities",
             )
         except API_ERRORS as e:
             return handle_api_error("get notification channels", e)
@@ -520,11 +515,11 @@ class AlertsClient:
     async def get_workflows(self, account_id: str) -> PaginatedResult | ApiError:
         """Get workflows"""
         query = """
-        query($accountId: Int!) {
+        query($accountId: Int!, $cursor: String) {
           actor {
             account(id: $accountId) {
               aiWorkflows {
-                workflows {
+                workflows(cursor: $cursor) {
                   entities {
                     id
                     name
@@ -560,8 +555,11 @@ class AlertsClient:
         """
 
         try:
-            return await self._query_entities(
-                query, account_id, ["data", "actor", "account", "aiWorkflows", "workflows"]
+            return await self._base.paginate_graphql(
+                query,
+                {"accountId": int(account_id)},
+                ["data", "actor", "account", "aiWorkflows", "workflows"],
+                "entities",
             )
         except API_ERRORS as e:
             return handle_api_error("get workflows", e)
@@ -760,10 +758,14 @@ class AlertsClient:
             condition_config["terms"] = [
                 {
                     "threshold": threshold if threshold is not None else existing_term.get("threshold", 0),
-                    "operator": threshold_operator or existing_term.get("operator", "ABOVE"),
-                    "thresholdDuration": threshold_duration or existing_term.get("thresholdDuration", 300),
+                    "operator": threshold_operator
+                    if threshold_operator is not None
+                    else existing_term.get("operator", "ABOVE"),
+                    "thresholdDuration": threshold_duration
+                    if threshold_duration is not None
+                    else existing_term.get("thresholdDuration", 300),
                     "thresholdOccurrences": existing_term.get("thresholdOccurrences", "AT_LEAST_ONCE"),
-                    "priority": priority or existing_term.get("priority", "CRITICAL"),
+                    "priority": priority if priority is not None else existing_term.get("priority", "CRITICAL"),
                 }
             ]
 

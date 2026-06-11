@@ -57,7 +57,7 @@ class TestCreateNRQLConditionHandler:
         )
         assert "cond-1" in result[0].text
 
-    async def test_high_priority_mapped_to_warning(self, mock_client, config):
+    async def test_priority_passed_through_unmapped(self, mock_client, config):
         mock_client.alerts.create_nrql_condition.return_value = {"id": "c1"}
         handler = CreateNRQLConditionHandler(mock_client, config)
         await handler.handle(
@@ -66,7 +66,7 @@ class TestCreateNRQLConditionHandler:
                 "name": "cond",
                 "nrql_query": "SELECT count(*) FROM Transaction",
                 "threshold": 1.0,
-                "priority": "HIGH",
+                "priority": "WARNING",
             },
             "1234567",
         )

@@ -192,10 +192,14 @@ class TestDeleteWidget:
                     }
                 }
             },
-            {"data": {"dashboardUpdateWidgetsInPage": {"errors": None}}},
+            {"data": {"dashboardUpdatePage": {"errors": None}}},
         ]
         result = await client.delete_widget("pg1", "w1")
         assert result["success"] is True
+        mutation, variables = client._base.execute_graphql.call_args.args[:2]
+        assert "dashboardUpdatePage" in mutation
+        assert variables["page"]["name"] == "Page 1"
+        assert [w["id"] for w in variables["page"]["widgets"]] == ["w2"]
 
     async def test_widget_not_found(self):
         client = _make_client()

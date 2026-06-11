@@ -11,17 +11,9 @@ class ValidationError(Exception):
     """Custom exception for validation errors"""
 
 
-# Pre-compiled patterns for performance
-_DANGEROUS_NRQL_PATTERNS = [
-    re.compile(r";\s*DROP\s+", re.IGNORECASE),
-    re.compile(r";\s*DELETE\s+", re.IGNORECASE),
-    re.compile(r";\s*UPDATE\s+", re.IGNORECASE),
-    re.compile(r";\s*INSERT\s+", re.IGNORECASE),
-    re.compile(r"<script\b", re.IGNORECASE),
-    re.compile(r"javascript:", re.IGNORECASE),
-    re.compile(r"vbscript:", re.IGNORECASE),
-]
-_NRQL_SELECT_PATTERN = re.compile(r"^\s*SELECT\s+", re.IGNORECASE)
+# NRQL is read-only (no DDL/DML), so validation is shape + length only.
+# Queries may start with either SELECT or FROM (both are valid NRQL forms).
+_NRQL_START_PATTERN = re.compile(r"^\s*(SELECT|FROM)\s+", re.IGNORECASE)
 _GUID_PATTERN = re.compile(r"^[A-Za-z0-9+/=]+$")
 
 
@@ -37,12 +29,8 @@ class InputValidator:
         if len(query) > 10000:
             raise ValidationError("NRQL query too long (max 10,000 characters)")
 
-        for pattern in _DANGEROUS_NRQL_PATTERNS:
-            if pattern.search(query):
-                raise ValidationError(f"Query contains potentially dangerous pattern: {pattern.pattern}")
-
-        if not _NRQL_SELECT_PATTERN.match(query):
-            raise ValidationError("NRQL query must start with SELECT")
+        if not _NRQL_START_PATTERN.match(query):
+            raise ValidationError("NRQL query must start with SELECT or FROM")
 
         return query.strip()
 

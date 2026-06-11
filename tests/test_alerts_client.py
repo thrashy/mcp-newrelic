@@ -145,22 +145,13 @@ class TestDeleteNRQLCondition:
 class TestGetDestinations:
     async def test_success(self):
         client = _make_client()
-        client._base.execute_graphql.return_value = {
-            "data": {
-                "actor": {
-                    "account": {
-                        "aiNotifications": {
-                            "destinations": {
-                                "entities": [{"id": "d1", "name": "Slack", "type": "SLACK"}],
-                                "totalCount": 1,
-                                "nextCursor": None,
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        client._base.paginate_graphql.return_value = PaginatedResult(
+            items=[{"id": "d1", "name": "Slack", "type": "SLACK"}], total_count=1
+        )
         result = await client.get_destinations("1234567")
+        query, variables = client._base.paginate_graphql.call_args.args[:2]
+        assert "$cursor: String" in query and "destinations(cursor: $cursor)" in query
+        assert variables == {"accountId": 1234567}
         assert isinstance(result, PaginatedResult)
         assert len(result.items) == 1
 
@@ -168,22 +159,12 @@ class TestGetDestinations:
 class TestGetWorkflows:
     async def test_success(self):
         client = _make_client()
-        client._base.execute_graphql.return_value = {
-            "data": {
-                "actor": {
-                    "account": {
-                        "aiWorkflows": {
-                            "workflows": {
-                                "entities": [{"id": "wf1", "name": "Prod Workflow"}],
-                                "totalCount": 1,
-                                "nextCursor": None,
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        client._base.paginate_graphql.return_value = PaginatedResult(
+            items=[{"id": "w1", "name": "Prod Workflow"}], total_count=1
+        )
         result = await client.get_workflows("1234567")
+        query, _variables = client._base.paginate_graphql.call_args.args[:2]
+        assert "workflows(cursor: $cursor)" in query
         assert isinstance(result, PaginatedResult)
         assert len(result.items) == 1
         assert result.items[0]["name"] == "Prod Workflow"
