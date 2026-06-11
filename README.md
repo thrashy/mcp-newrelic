@@ -91,6 +91,23 @@ Add the server to your MCP client config. **You do not need to start the server 
 
 Where this config lives depends on your client (e.g., `~/.claude.json` for Claude Code, `claude_desktop_config.json` for Claude Desktop, `.cursor/mcp.json` for Cursor, etc.). Replace `/path/to/mcp-newrelic/server.py` with the actual path to your clone.
 
+Alternatively, use the `newrelic-mcp` console script instead of pointing at `server.py`:
+
+```json
+{
+  "mcpServers": {
+    "newrelic": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/mcp-newrelic", "newrelic-mcp"],
+      "env": {
+        "NEW_RELIC_API_KEY": "your-api-key",
+        "NEW_RELIC_ACCOUNT_ID": "your-account-id"
+      }
+    }
+  }
+}
+```
+
 ### Advanced Configuration
 
 If you need to run the server manually (e.g., for development or debugging), it supports flexible configuration with clear precedence (highest to lowest):
@@ -210,7 +227,8 @@ Access structured data through these MCP resources:
 - **Composition**: `NewRelicClient` composes specialized sub-clients (`monitoring`, `alerts`, `dashboards`, `entities`) instead of using multiple inheritance
 - **Configuration**: Hierarchical config (CLI > file > env vars) with validation
 - **Error Handling**: Typed `ApiError` dataclass for consistent error propagation
-- **Pagination**: Cursor-based pagination for NerdGraph queries (entity search, alert policies, conditions, service levels, synthetic monitors)
+- **Pagination**: Cursor-based pagination for NerdGraph queries (entity search, dashboards, alert policies, conditions, notification destinations/channels, workflows, service levels, synthetic monitors)
+- **Resilience**: Bounded retry with backoff on HTTP 429/502/503/504, honoring `Retry-After`
 
 ### Key Components
 - **`NewRelicClient`**: Unified client composing all specialized sub-clients
