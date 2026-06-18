@@ -27,7 +27,7 @@ class GetDashboardsHandler(ToolHandlerStrategy):
         if isinstance(result, ApiError):
             return self._handle_dashboard_error(result)
 
-        return self._format_dashboard_list(result.items, search, guid)
+        return self._create_success_response(format_dashboard_list(result.items, search, guid, limit_display=50))
 
     def _handle_dashboard_error(self, error: ApiError) -> list[TextContent]:
         """Handle dashboard retrieval errors"""
@@ -41,11 +41,6 @@ class GetDashboardsHandler(ToolHandlerStrategy):
             f"4. **Account Region Mismatch** - Check if your account is in EU region (currently using {self.config.region})"
         )
         return [TextContent(type="text", text=error_msg)]
-
-    def _format_dashboard_list(self, dashboards: list[dict], search: str | None, guid: str | None) -> list[TextContent]:
-        """Format dashboard list for display"""
-        dashboard_text = format_dashboard_list(dashboards, search, guid, limit_display=50)
-        return self._create_success_response(dashboard_text)
 
 
 class CreateDashboardHandler(ToolHandlerStrategy):

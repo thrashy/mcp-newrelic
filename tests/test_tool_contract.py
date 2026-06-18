@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from newrelic_mcp.config.newrelic_config import NewRelicConfig
+from newrelic_mcp.config import NewRelicConfig
 from newrelic_mcp.handlers.tool_definitions import get_all_tools
 from newrelic_mcp.handlers.tool_handlers import ToolHandlers
 

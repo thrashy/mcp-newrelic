@@ -10,7 +10,6 @@ from typing import Any
 from ..types import ApiError, PaginatedResult
 from ..utils.error_handling import API_ERRORS, handle_api_error, handle_graphql_notification_errors
 from ..utils.graphql_helpers import extract_nested_data
-from ..utils.response_formatters import format_create_response
 from .base_client import BaseNewRelicClient
 
 logger = logging.getLogger(__name__)
@@ -47,11 +46,7 @@ class AlertsClient:
         if isinstance(policy_result, ApiError):
             return policy_result
 
-        return format_create_response(
-            policy_result,
-            name="name",
-            incident_preference="incidentPreference",
-        )
+        return policy_result
 
     async def create_nrql_condition(
         self,
@@ -120,13 +115,7 @@ class AlertsClient:
         if isinstance(condition_result, ApiError):
             return condition_result
 
-        return format_create_response(
-            condition_result,
-            name="name",
-            enabled="enabled",
-            query=["nrql", "query"],
-            terms="terms",
-        )
+        return condition_result
 
     async def create_notification_destination(
         self, account_id: str, name: str, destination_type: str, properties: dict[str, Any]
@@ -170,13 +159,8 @@ class AlertsClient:
             if error_response:
                 return error_response
 
-            destination = create_result.get("destination", {})
-            return format_create_response(
-                destination,
-                name="name",
-                type="type",
-                properties="properties",
-            )
+            destination: dict[str, Any] = create_result.get("destination") or {}
+            return destination
 
         except API_ERRORS as e:
             return handle_api_error("create notification destination", e)
@@ -233,15 +217,8 @@ class AlertsClient:
             if error_response:
                 return error_response
 
-            channel = create_result.get("channel", {})
-            return format_create_response(
-                channel,
-                name="name",
-                type="type",
-                destination_id="destinationId",
-                product="product",
-                properties="properties",
-            )
+            channel: dict[str, Any] = create_result.get("channel") or {}
+            return channel
 
         except API_ERRORS as e:
             return handle_api_error("create notification channel", e)
@@ -314,14 +291,8 @@ class AlertsClient:
         if isinstance(create_result, ApiError):
             return create_result
 
-        workflow = create_result.get("workflow", {})
-        return format_create_response(
-            workflow,
-            name="name",
-            destination_configurations="destinationConfigurations",
-            issues_filter="issuesFilter",
-            enrichments="enrichments",
-        )
+        workflow: dict[str, Any] = create_result.get("workflow") or {}
+        return workflow
 
     async def get_alert_policies(self, account_id: str) -> PaginatedResult | ApiError:
         """Get list of alert policies with cursor-based pagination"""
@@ -602,11 +573,7 @@ class AlertsClient:
         if isinstance(policy_result, ApiError):
             return policy_result
 
-        return format_create_response(
-            policy_result,
-            name="name",
-            incident_preference="incidentPreference",
-        )
+        return policy_result
 
     async def delete_nrql_condition(self, account_id: str, condition_id: str) -> dict[str, Any] | ApiError:
         """Delete an alert condition"""
@@ -754,13 +721,7 @@ class AlertsClient:
         if isinstance(condition_result, ApiError):
             return condition_result
 
-        return format_create_response(
-            condition_result,
-            name="name",
-            enabled="enabled",
-            query=["nrql", "query"],
-            terms="terms",
-        )
+        return condition_result
 
     async def delete_notification_destination(self, account_id: str, destination_id: str) -> dict[str, Any] | ApiError:
         """Delete a notification destination"""
@@ -854,12 +815,7 @@ class AlertsClient:
         if isinstance(rule_result, ApiError):
             return rule_result
 
-        return format_create_response(
-            rule_result,
-            name="name",
-            enabled="enabled",
-            schedule="schedule",
-        )
+        return rule_result
 
     async def get_muting_rules(self, account_id: str) -> PaginatedResult | ApiError:
         """Get all muting rules for the account"""
@@ -969,12 +925,7 @@ class AlertsClient:
         if isinstance(rule_result, ApiError):
             return rule_result
 
-        return format_create_response(
-            rule_result,
-            name="name",
-            enabled="enabled",
-            schedule="schedule",
-        )
+        return rule_result
 
     async def delete_muting_rule(self, account_id: str, rule_id: str) -> dict[str, Any] | ApiError:
         """Delete a muting rule"""
@@ -1056,13 +1007,8 @@ class AlertsClient:
         if isinstance(update_result, ApiError):
             return update_result
 
-        workflow = update_result.get("workflow", {})
-        return format_create_response(
-            workflow,
-            name="name",
-            destination_configurations="destinationConfigurations",
-            issues_filter="issuesFilter",
-        )
+        workflow: dict[str, Any] = update_result.get("workflow") or {}
+        return workflow
 
     async def delete_notification_channel(self, account_id: str, channel_id: str) -> dict[str, Any] | ApiError:
         """Delete a notification channel"""

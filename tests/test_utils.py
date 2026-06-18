@@ -12,7 +12,6 @@ from newrelic_mcp.utils.error_handling import (
     handle_api_error,
     handle_graphql_notification_errors,
 )
-from newrelic_mcp.utils.response_formatters import format_create_response
 
 
 class TestHandleApiError:
@@ -56,28 +55,6 @@ class TestFormatResourceError:
     def test_formats_error(self):
         result = format_resource_error(ApiError("no access"), "Dashboards")
         assert result == "# Dashboards\n\nError: no access"
-
-
-class TestFormatCreateResponse:
-    def test_basic_response(self):
-        result = format_create_response({"id": "abc123"})
-        assert result == {"success": True, "id": "abc123"}
-
-    def test_with_extra_fields(self):
-        result = format_create_response(
-            {"id": "abc", "name": "test", "enabled": True},
-            name="name",
-            enabled="enabled",
-        )
-        assert result["name"] == "test"
-        assert result["enabled"] is True
-
-    def test_nested_path(self):
-        result = format_create_response(
-            {"id": "abc", "nrql": {"query": "SELECT 1"}},
-            query=["nrql", "query"],
-        )
-        assert result["query"] == "SELECT 1"
 
 
 class TestFormatDashboardList:

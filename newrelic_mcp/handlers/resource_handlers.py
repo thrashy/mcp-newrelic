@@ -9,6 +9,7 @@ from ..client import NewRelicClient
 from ..config import NewRelicConfig
 from ..types import ApiError
 from ..utils.alert_formatters import format_alert_condition, format_alert_policy
+from ..utils.dashboard_formatters import format_dashboard_list
 from ..utils.error_handling import format_resource_error
 
 logger = logging.getLogger(__name__)
@@ -109,24 +110,7 @@ class ResourceHandlers:
         if isinstance(result, ApiError):
             return format_resource_error(result, "New Relic Dashboards")
 
-        if not result.items:
-            return "# New Relic Dashboards\n\nNo dashboards found."
-
-        dashboard_list = f"# New Relic Dashboards\n\n{len(result.items)} dashboards found:\n\n"
-        for dashboard in result.items:
-            name = dashboard.get("name", "Unknown")
-            guid = dashboard.get("guid", "Unknown")
-            created = dashboard.get("createdAt", "Unknown")
-            permalink = dashboard.get("permalink", "")
-
-            dashboard_list += f"## {name}\n"
-            dashboard_list += f"- **GUID**: {guid}\n"
-            dashboard_list += f"- **Created**: {created}\n"
-            if permalink:
-                dashboard_list += f"- **URL**: {permalink}\n"
-            dashboard_list += "\n"
-
-        return dashboard_list
+        return "# New Relic Dashboards\n\n" + format_dashboard_list(result.items)
 
     async def _read_alert_policies(self, account_id: str) -> str:
         result = await self.client.alerts.get_alert_policies(account_id)

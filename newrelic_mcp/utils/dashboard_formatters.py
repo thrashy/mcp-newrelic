@@ -55,18 +55,8 @@ def build_raw_nrql_queries(account_id: str, widget_query: str) -> list[dict[str,
 
 def build_widget_configuration(widget_type: str, account_id: str, widget_query: str) -> dict[str, Any]:
     """Build widget configuration for different visualization types"""
-    nrql_query = {"accountId": int(account_id), "query": widget_query}
-
-    widget_configurations = {
-        "area": {"area": {"nrqlQueries": [nrql_query]}},
-        "bar": {"bar": {"nrqlQueries": [nrql_query]}},
-        "billboard": {"billboard": {"nrqlQueries": [nrql_query]}},
-        "line": {"line": {"nrqlQueries": [nrql_query]}},
-        "pie": {"pie": {"nrqlQueries": [nrql_query]}},
-        "table": {"table": {"nrqlQueries": [nrql_query]}},
-    }
-
-    return widget_configurations.get(widget_type, {"line": {"nrqlQueries": [nrql_query]}})
+    viz = widget_type if widget_type in {"area", "bar", "billboard", "line", "pie", "table"} else "line"
+    return {viz: {"nrqlQueries": [{"accountId": int(account_id), "query": widget_query}]}}
 
 
 def extract_nrql_queries(config: dict[str, Any]) -> list[str]:

@@ -178,7 +178,7 @@ class TestUpdateMutingRule:
             "data": {"alertsMutingRuleUpdate": {"id": "mr1", "name": "Renamed", "enabled": False}}
         }
         result = await client.update_muting_rule("1234567", "mr1", name="Renamed", enabled=False)
-        assert result["success"] is True
+        assert result["id"] == "mr1"
         assert result["name"] == "Renamed"
         variables = client._base.execute_graphql.call_args.args[1]
         assert variables["id"] == "mr1"
@@ -212,7 +212,7 @@ class TestUpdateWorkflow:
             "data": {"aiWorkflowsUpdateWorkflow": {"workflow": {"id": "wf1", "name": "Renamed"}, "errors": None}}
         }
         result = await client.update_workflow("1234567", "wf1", name="Renamed", enabled=True)
-        assert result["success"] is True
+        assert result["id"] == "wf1"
         assert result["name"] == "Renamed"
         variables = client._base.execute_graphql.call_args.args[1]
         assert variables["updateWorkflowData"] == {"id": "wf1", "name": "Renamed", "workflowEnabled": True}
@@ -274,7 +274,7 @@ class TestUpdateNRQLConditionAggregationWindow:
             "data": {"alertsNrqlConditionStaticUpdate": {"id": "c1", "name": "Cond", "enabled": True}}
         }
         result = await client.update_nrql_condition("1234567", "c1", aggregation_window=120)
-        assert result["success"] is True
+        assert result["id"] == "c1"
         variables = client._base.execute_graphql.call_args.args[1]
         assert variables["condition"]["signal"] == {"aggregationWindow": 120}
 
@@ -339,7 +339,7 @@ class TestNRQLConditionThresholdOccurrences:
         result = await client.update_nrql_condition(
             "1234567", "c1", threshold_duration=300, threshold_occurrences="ALL"
         )
-        assert result["success"] is True
+        assert result["id"] == "c1"
         term = client._base.execute_graphql.call_args.args[1]["condition"]["terms"][0]
         assert term["thresholdOccurrences"] == "ALL"
         assert term["thresholdDuration"] == 300

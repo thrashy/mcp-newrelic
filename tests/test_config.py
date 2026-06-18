@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 
-from newrelic_mcp.config.newrelic_config import NewRelicConfig
+from newrelic_mcp.config import NewRelicConfig
 
 
 class TestFromEnv:

@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from newrelic_mcp.client.base_client import BaseNewRelicClient
-from newrelic_mcp.config.newrelic_config import NewRelicConfig
+from newrelic_mcp.config import NewRelicConfig
 from newrelic_mcp.types import PaginatedResult
 
 

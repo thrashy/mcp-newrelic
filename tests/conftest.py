@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from newrelic_mcp.config.newrelic_config import NewRelicConfig
+from newrelic_mcp.config import NewRelicConfig
 
 
 @pytest.fixture
