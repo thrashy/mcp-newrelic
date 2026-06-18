@@ -549,6 +549,16 @@ def get_alert_tools() -> list[Tool]:
                         "minimum": 60,
                         "maximum": 7200,
                     },
+                    "threshold_occurrences": {
+                        "type": "string",
+                        "description": (
+                            "How often the threshold must be breached within threshold_duration. "
+                            "ALL = breached for the entire window (sustained, filters transient blips); "
+                            "AT_LEAST_ONCE = breached in any single aggregation window (fires on momentary spikes)."
+                        ),
+                        "default": "AT_LEAST_ONCE",
+                        "enum": ["ALL", "AT_LEAST_ONCE"],
+                    },
                     "priority": {
                         "type": "string",
                         "description": "Alert priority — NerdGraph accepts only CRITICAL or WARNING",
@@ -702,6 +712,15 @@ def get_alert_tools() -> list[Tool]:
                         "description": "New threshold duration in seconds (optional)",
                         "minimum": 60,
                         "maximum": 7200,
+                    },
+                    "threshold_occurrences": {
+                        "type": "string",
+                        "description": (
+                            "New threshold occurrences (optional). ALL = breached for the entire "
+                            "threshold_duration (sustained, filters transient blips); AT_LEAST_ONCE = "
+                            "breached in any single aggregation window (fires on momentary spikes)."
+                        ),
+                        "enum": ["ALL", "AT_LEAST_ONCE"],
                     },
                     "priority": {
                         "type": "string",

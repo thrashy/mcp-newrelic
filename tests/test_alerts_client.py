@@ -288,6 +288,64 @@ class TestUpdateNRQLConditionAggregationWindow:
         assert "signal" not in variables["condition"]
 
 
+class TestNRQLConditionThresholdOccurrences:
+    async def test_create_defaults_to_at_least_once(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"alertsNrqlConditionStaticCreate": {"id": "c1", "name": "T", "enabled": True}}
+        }
+        await client.create_nrql_condition("1234567", "p1", "T", "SELECT 1", 1.0)
+        term = client._base.execute_graphql.call_args.args[1]["condition"]["terms"][0]
+        assert term["thresholdOccurrences"] == "AT_LEAST_ONCE"
+
+    async def test_create_honors_override(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"alertsNrqlConditionStaticCreate": {"id": "c1", "name": "T", "enabled": True}}
+        }
+        await client.create_nrql_condition("1234567", "p1", "T", "SELECT 1", 1.0, threshold_occurrences="ALL")
+        term = client._base.execute_graphql.call_args.args[1]["condition"]["terms"][0]
+        assert term["thresholdOccurrences"] == "ALL"
+
+    async def test_update_overrides_occurrences_and_preserves_existing_threshold(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(
+            side_effect=[
+                {
+                    "data": {
+                        "actor": {
+                            "account": {
+                                "alerts": {
+                                    "nrqlCondition": {
+                                        "id": "c1",
+                                        "terms": [
+                                            {
+                                                "operator": "ABOVE",
+                                                "priority": "CRITICAL",
+                                                "threshold": 0.2,
+                                                "thresholdDuration": 60,
+                                                "thresholdOccurrences": "AT_LEAST_ONCE",
+                                            }
+                                        ],
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {"data": {"alertsNrqlConditionStaticUpdate": {"id": "c1", "name": "Cond", "enabled": True}}},
+            ]
+        )
+        result = await client.update_nrql_condition(
+            "1234567", "c1", threshold_duration=300, threshold_occurrences="ALL"
+        )
+        assert result["success"] is True
+        term = client._base.execute_graphql.call_args.args[1]["condition"]["terms"][0]
+        assert term["thresholdOccurrences"] == "ALL"
+        assert term["thresholdDuration"] == 300
+        assert term["threshold"] == 0.2
+
+
 class TestDeleteWorkflow:
     async def test_success(self):
         client = _make_client()

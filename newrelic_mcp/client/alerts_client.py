@@ -65,6 +65,7 @@ class AlertsClient:
         priority: str = "CRITICAL",
         aggregation_window: int = 60,
         description: str | None = None,
+        threshold_occurrences: str = "AT_LEAST_ONCE",
     ) -> dict[str, Any] | ApiError:
         """Create a NRQL alert condition"""
         mutation = """
@@ -102,7 +103,7 @@ class AlertsClient:
                     "priority": priority,
                     "threshold": threshold,
                     "thresholdDuration": threshold_duration,
-                    "thresholdOccurrences": "AT_LEAST_ONCE",
+                    "thresholdOccurrences": threshold_occurrences,
                 }
             ],
         }
@@ -680,6 +681,7 @@ class AlertsClient:
         description: str | None = None,
         priority: str | None = None,
         aggregation_window: int | None = None,
+        threshold_occurrences: str | None = None,
     ) -> dict[str, Any] | ApiError:
         """Update an existing NRQL alert condition (fetch-then-merge for partial updates)."""
         mutation = """
@@ -703,7 +705,9 @@ class AlertsClient:
         """
 
         # Fetch current condition to merge with user-provided fields
-        needs_term_update = any(v is not None for v in (threshold, threshold_operator, threshold_duration, priority))
+        needs_term_update = any(
+            v is not None for v in (threshold, threshold_operator, threshold_duration, priority, threshold_occurrences)
+        )
         if needs_term_update:
             current = await self._get_nrql_condition(account_id, condition_id)
             if isinstance(current, ApiError):
@@ -734,7 +738,9 @@ class AlertsClient:
                     "thresholdDuration": threshold_duration
                     if threshold_duration is not None
                     else existing_term.get("thresholdDuration", 300),
-                    "thresholdOccurrences": existing_term.get("thresholdOccurrences", "AT_LEAST_ONCE"),
+                    "thresholdOccurrences": threshold_occurrences
+                    if threshold_occurrences is not None
+                    else existing_term.get("thresholdOccurrences", "AT_LEAST_ONCE"),
                     "priority": priority if priority is not None else existing_term.get("priority", "CRITICAL"),
                 }
             ]

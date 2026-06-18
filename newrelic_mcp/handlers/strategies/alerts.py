@@ -41,6 +41,7 @@ class CreateNRQLConditionHandler(ToolHandlerStrategy):
         priority = arguments.get("priority", "CRITICAL")
         aggregation_window = arguments.get("aggregation_window", 60)
         description = arguments.get("description")
+        threshold_occurrences = arguments.get("threshold_occurrences", "AT_LEAST_ONCE")
 
         result = self._unwrap(
             await self.client.alerts.create_nrql_condition(
@@ -54,6 +55,7 @@ class CreateNRQLConditionHandler(ToolHandlerStrategy):
                 priority,
                 aggregation_window,
                 description,
+                threshold_occurrences=threshold_occurrences,
             ),
             f"creating NRQL condition '{name}'",
         )
@@ -193,6 +195,7 @@ class UpdateNRQLConditionHandler(ToolHandlerStrategy):
                 description=arguments.get("description"),
                 priority=arguments.get("priority"),
                 aggregation_window=arguments.get("aggregation_window"),
+                threshold_occurrences=arguments.get("threshold_occurrences"),
             ),
             f"updating condition '{condition_id}'",
         )
