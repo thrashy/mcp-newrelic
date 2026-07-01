@@ -1041,7 +1041,7 @@ class AlertsClient:
             return handle_api_error("delete notification channel", e)
 
     async def delete_workflow(
-        self, account_id: str, workflow_id: str, delete_channels: bool = True
+        self, account_id: str, workflow_id: str, delete_channels: bool = False
     ) -> dict[str, Any] | ApiError:
         """Delete a workflow"""
         mutation = """

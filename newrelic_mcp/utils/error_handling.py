@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from ..types import ApiError
+from .redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +18,9 @@ API_ERRORS = (httpx.HTTPError, ValueError)
 
 def handle_api_error(operation_name: str, exception: Exception) -> ApiError:
     """Standardized error handling for API operations"""
-    logger.error("%s failed: %s", operation_name, exception)
-    return ApiError(str(exception))
+    message = redact_secrets(str(exception))
+    logger.error("%s failed: %s", operation_name, message)
+    return ApiError(message)
 
 
 def handle_graphql_notification_errors(create_result: dict[str, Any], operation_name: str) -> ApiError | None:
@@ -29,7 +31,7 @@ def handle_graphql_notification_errors(create_result: dict[str, Any], operation_
             error = errors[0]
             error_type = error.get("__typename", "Unknown")
             error_msg = error.get("description", error.get("type", f"Error type: {error_type}"))
-            return ApiError(f"{operation_name} failed: {error_msg}")
+            return ApiError(f"{operation_name} failed: {redact_secrets(str(error_msg))}")
     return None
 
 

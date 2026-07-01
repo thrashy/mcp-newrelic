@@ -15,6 +15,7 @@ from ..config import NewRelicConfig
 from ..types import ApiError, DecodedEntityGuid, PaginatedResult
 from ..utils.error_handling import API_ERRORS, handle_api_error
 from ..utils.graphql_helpers import extract_nested_data
+from ..utils.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +94,13 @@ class BaseNewRelicClient:
 
         if "errors" in result:
             errors = result["errors"]
-            logger.error("GraphQL errors: %s", errors)
+            safe_errors = redact_secrets(str(errors))
+            logger.error("GraphQL errors: %s", safe_errors)
             hint = ""
             if errors and isinstance(errors, list):
                 error_code = errors[0].get("extensions", {}).get("errorCode", "")
                 hint = _NRQL_ERROR_HINTS.get(error_code, "")
-            msg = f"GraphQL query failed: {errors}"
+            msg = f"GraphQL query failed: {safe_errors}"
             if hint:
                 msg += f"\nHint: {hint}"
             raise ValueError(msg)

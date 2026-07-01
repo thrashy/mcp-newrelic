@@ -266,7 +266,7 @@ class TestDeleteWorkflowHandler:
         mock_client.alerts.delete_workflow.return_value = {"success": True, "id": "wf1"}
         handler = DeleteWorkflowHandler(mock_client, config)
         await handler.handle({"workflow_id": "wf1"}, "1234567")
-        mock_client.alerts.delete_workflow.assert_called_once_with("1234567", "wf1", True)
+        mock_client.alerts.delete_workflow.assert_called_once_with("1234567", "wf1", False)
 
 
 class TestListAlertConditionsSearchFilters:

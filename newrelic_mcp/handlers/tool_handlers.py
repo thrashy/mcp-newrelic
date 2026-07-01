@@ -8,6 +8,7 @@ from mcp.types import TextContent
 from ..client import NewRelicClient
 from ..config import NewRelicConfig
 from ..types import ToolError
+from ..utils.redaction import redact_secrets
 from ..validators import ValidationError
 from .strategies.alerts import (
     CreateAlertPolicyHandler,
@@ -213,10 +214,11 @@ class ToolHandlers:
             return await strategy.handle(arguments, account_id or "")
 
         except (ValidationError, ToolError) as e:
-            return [TextContent(type="text", text=f"Error: {e}")]
+            return [TextContent(type="text", text=f"Error: {redact_secrets(str(e))}")]
         except Exception as e:
-            logger.error("Error calling tool %s: %s", name, e)
-            return [TextContent(type="text", text=f"Error executing {name}: {str(e)}")]
+            message = redact_secrets(str(e))
+            logger.error("Error calling tool %s: %s", name, message)
+            return [TextContent(type="text", text=f"Error executing {name}: {message}")]
 
     def _validate_tool_access(self, name: str) -> str | None:
         """Enforce allow/deny lists and write/destructive gating. Returns an error message or None."""
