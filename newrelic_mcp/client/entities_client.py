@@ -32,6 +32,7 @@ class EntitiesClient:
 
     async def entity_search(
         self,
+        account_id: str,
         name: str | None = None,
         entity_type: str | None = None,
         domain: str | None = None,
@@ -42,6 +43,7 @@ class EntitiesClient:
         """Search for entities using NerdGraph entitySearch with cursor-based pagination.
 
         Args:
+            account_id: Scope the search to this New Relic account.
             name: Partial name match (LIKE).
             entity_type: Entity type filter (APPLICATION, HOST, MONITOR, etc.).
             domain: Domain filter (APM, INFRA, SYNTH, BROWSER, MOBILE, EXT).
@@ -49,7 +51,7 @@ class EntitiesClient:
             limit: Maximum entities to return (default 25, max 200).
             minimal_output: If True, omit tags and extra metadata from results.
         """
-        parts = []
+        parts = [f"accountId = {int(account_id)}"]
         if name:
             parts.append(f"name LIKE '%{escape_nrql_string(name)}%'")
         if entity_type:
@@ -59,8 +61,10 @@ class EntitiesClient:
         if tags:
             for tag in tags:
                 parts.append(f"tags.`{escape_nrql_string(tag['key'])}` = '{escape_nrql_string(tag['value'])}'")
+        if len(parts) == 1:
+            parts.append("domain IN ('APM', 'INFRA', 'SYNTH', 'BROWSER')")
 
-        query_string = " AND ".join(parts) if parts else "domain IN ('APM', 'INFRA', 'SYNTH', 'BROWSER')"
+        query_string = " AND ".join(parts)
 
         # Use a lighter fields fragment when minimal_output is requested
         if minimal_output:

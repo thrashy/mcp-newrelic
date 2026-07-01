@@ -21,5 +21,9 @@ def extract_nrql_results(result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def escape_nrql_string(value: str) -> str:
-    """Escape a string value for safe embedding in a NRQL query"""
-    return value.replace("\\", "\\\\").replace("'", "\\'")
+    """Escape a string value for safe embedding in a NRQL query.
+
+    Backticks are escaped too because entity_search embeds tag keys inside
+    backtick-quoted identifiers (tags.`key`), where a raw backtick would break out.
+    """
+    return value.replace("\\", "\\\\").replace("'", "\\'").replace("`", "\\`")

@@ -28,14 +28,14 @@ class TestEntitySearch:
         client._base.paginate_graphql.return_value = PaginatedResult(
             items=[{"guid": "g1", "name": "App1"}], total_count=1
         )
-        entities = await client.entity_search(name="App1")
+        entities = await client.entity_search("1234567", name="App1")
         assert len(entities) == 1
         assert entities[0]["name"] == "App1"
 
     async def test_with_type_and_domain(self):
         client = _make_client()
         client._base.paginate_graphql.return_value = PaginatedResult(items=[], total_count=0)
-        entities = await client.entity_search(entity_type="APPLICATION", domain="APM")
+        entities = await client.entity_search("1234567", entity_type="APPLICATION", domain="APM")
         assert entities == []
 
     async def test_with_tags(self):
@@ -43,13 +43,20 @@ class TestEntitySearch:
         client._base.paginate_graphql.return_value = PaginatedResult(
             items=[{"guid": "g1", "name": "Tagged"}], total_count=1
         )
-        entities = await client.entity_search(tags=[{"key": "env", "value": "prod"}])
+        entities = await client.entity_search("1234567", tags=[{"key": "env", "value": "prod"}])
         assert len(entities) == 1
+
+    async def test_scopes_query_to_account(self):
+        client = _make_client()
+        client._base.paginate_graphql.return_value = PaginatedResult(items=[], total_count=0)
+        await client.entity_search("1234567")
+        search_query = client._base.paginate_graphql.call_args.args[1]["searchQuery"]
+        assert "accountId = 1234567" in search_query
 
     async def test_exception_returns_error(self):
         client = _make_client()
         client._base.paginate_graphql = AsyncMock(side_effect=ValueError("fail"))
-        result = await client.entity_search(name="App1")
+        result = await client.entity_search("1234567", name="App1")
         assert isinstance(result, ApiError)
 
     async def test_limit_passed_to_paginate(self):
@@ -57,21 +64,21 @@ class TestEntitySearch:
         client._base.paginate_graphql.return_value = PaginatedResult(
             items=[{"guid": "g1", "name": "App1"}], total_count=1
         )
-        await client.entity_search(name="App1", limit=5)
+        await client.entity_search("1234567", name="App1", limit=5)
         call_kwargs = client._base.paginate_graphql.call_args
         assert call_kwargs.kwargs.get("limit") == 5
 
     async def test_limit_capped_at_200(self):
         client = _make_client()
         client._base.paginate_graphql.return_value = PaginatedResult(items=[], total_count=0)
-        await client.entity_search(name="App1", limit=500)
+        await client.entity_search("1234567", name="App1", limit=500)
         call_kwargs = client._base.paginate_graphql.call_args
         assert call_kwargs.kwargs.get("limit") == 200
 
     async def test_minimal_output_omits_tags_in_query(self):
         client = _make_client()
         client._base.paginate_graphql.return_value = PaginatedResult(items=[], total_count=0)
-        await client.entity_search(name="App1", minimal_output=True)
+        await client.entity_search("1234567", name="App1", minimal_output=True)
         call_args = client._base.paginate_graphql.call_args
         query = call_args.args[0] if call_args.args else call_args[0][0]
         assert "tags" not in query

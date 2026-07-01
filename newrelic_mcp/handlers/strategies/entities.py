@@ -12,9 +12,7 @@ from .base import ToolHandlerStrategy
 class EntitySearchHandler(ToolHandlerStrategy):
     """Handler for entity search"""
 
-    requires_account_id = False
-
-    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         name = arguments.get("name")
         entity_type = arguments.get("entity_type")
         domain = arguments.get("domain")
@@ -23,6 +21,7 @@ class EntitySearchHandler(ToolHandlerStrategy):
         minimal_output = arguments.get("minimal_output", False)
 
         result = await self.client.entities.entity_search(
+            account_id=account_id,
             name=name,
             entity_type=entity_type,
             domain=domain,
