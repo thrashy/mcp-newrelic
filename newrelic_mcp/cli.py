@@ -54,6 +54,24 @@ Example Usage:
     parser.add_argument("--timeout", type=int, default=None, help="HTTP timeout in seconds (default: 30)")
     parser.add_argument("--config", help="Path to JSON configuration file")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    # default=None so an unpassed flag doesn't override env/file config during merge
+    parser.add_argument(
+        "--enable-writes", action="store_true", default=None, help="Allow write tools (create/update/delete)"
+    )
+    parser.add_argument(
+        "--enable-destructive",
+        action="store_true",
+        default=None,
+        help="Allow destructive tools (update/delete/replace/suppress); requires --enable-writes",
+    )
+    parser.add_argument(
+        "--allow-account-override",
+        action="store_true",
+        default=None,
+        help="Allow tool calls to target an account other than the configured one",
+    )
+    parser.add_argument("--allowed-tools", default=None, help="Comma-separated allowlist of tool names")
+    parser.add_argument("--disabled-tools", default=None, help="Comma-separated denylist of tool names")
 
     return parser.parse_args()
 

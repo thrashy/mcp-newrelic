@@ -147,6 +147,22 @@ export NEW_RELIC_REGION="US"  # US or EU
 export NEW_RELIC_TIMEOUT="30"
 ```
 
+### Safety Controls
+
+The server is **read-only by default**. Write tools (create/update/delete) are blocked unless you
+opt in, and destructive tools (update/delete/replace, plus muting-rule creation) require a second
+opt-in on top of writes. Calls are also pinned to the configured account unless overrides are enabled.
+
+| Variable | CLI flag | Effect |
+| --- | --- | --- |
+| `NEW_RELIC_MCP_ENABLE_WRITES` | `--enable-writes` | Allow create/update/delete tools |
+| `NEW_RELIC_MCP_ENABLE_DESTRUCTIVE` | `--enable-destructive` | Allow destructive tools (also needs writes) |
+| `NEW_RELIC_MCP_ALLOW_ACCOUNT_OVERRIDE` | `--allow-account-override` | Allow a call's `account_id` to differ from the configured account |
+| `NEW_RELIC_MCP_ALLOWED_TOOLS` | `--allowed-tools` | Comma-separated allowlist; only these tools are exposed |
+| `NEW_RELIC_MCP_DISABLED_TOOLS` | `--disabled-tools` | Comma-separated denylist |
+
+Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/no/on/off`.
+
 ## Available Tools
 
 ### NRQL & Monitoring

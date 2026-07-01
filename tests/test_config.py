@@ -160,6 +160,54 @@ class TestMergeWith:
         assert merged.timeout == 0
 
 
+class TestSafetyControls:
+    def test_defaults_are_off(self):
+        cfg = NewRelicConfig()
+        assert cfg.writes_enabled is False
+        assert cfg.destructive_enabled is False
+        assert cfg.account_override_enabled is False
+        assert cfg.effective_allowed_tools is None
+        assert cfg.effective_disabled_tools == set()
+
+    def test_from_env_parses_flags_and_lists(self, monkeypatch):
+        monkeypatch.setenv("NEW_RELIC_MCP_ENABLE_WRITES", "true")
+        monkeypatch.setenv("NEW_RELIC_MCP_ENABLE_DESTRUCTIVE", "no")
+        monkeypatch.setenv("NEW_RELIC_MCP_DISABLED_TOOLS", "delete_dashboard, delete_widget")
+
+        cfg = NewRelicConfig.from_env()
+
+        assert cfg.writes_enabled is True
+        assert cfg.destructive_enabled is False
+        assert cfg.effective_disabled_tools == {"delete_dashboard", "delete_widget"}
+
+    def test_from_env_rejects_bad_bool(self, monkeypatch):
+        monkeypatch.setenv("NEW_RELIC_MCP_ENABLE_WRITES", "maybe")
+        with pytest.raises(ValueError):
+            NewRelicConfig.from_env()
+
+    def test_from_file_parses_list_form(self):
+        data = {"api_key": "NRAK-x", "account_id": "1", "allowed_tools": ["query_nrql", "entity_search"]}
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(data, f)
+            path = f.name
+        cfg = NewRelicConfig.from_file(path)
+        os.unlink(path)
+        assert cfg.effective_allowed_tools == {"query_nrql", "entity_search"}
+
+    def test_explicit_false_not_overridden_by_unset(self):
+        base = NewRelicConfig()
+        base.enable_writes = False
+        other = NewRelicConfig()  # enable_writes is None
+        assert base.merge_with(other).enable_writes is False
+
+    def test_true_overrides_false(self):
+        base = NewRelicConfig()
+        base.enable_writes = False
+        other = NewRelicConfig()
+        other.enable_writes = True
+        assert base.merge_with(other).enable_writes is True
+
+
 class TestIsValid:
     def test_valid_with_key_and_account(self):
         cfg = NewRelicConfig()

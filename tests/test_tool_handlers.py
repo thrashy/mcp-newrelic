@@ -36,7 +36,14 @@ class TestDispatch:
         assert "Decoded entity GUID" in result[0].text
         assert "12345" in result[0].text
 
-    async def test_argument_account_id_overrides_config(self, mock_client, config):
+    async def test_account_id_override_blocked_by_default(self, mock_client, config):
+        handlers = ToolHandlers(mock_client, config)
+        result = await handlers.handle_tool_call("list_alert_policies", {"account_id": "7654321"})
+        assert "override is disabled" in result[0].text
+        mock_client.alerts.get_alert_policies.assert_not_called()
+
+    async def test_argument_account_id_overrides_config_when_enabled(self, mock_client, config):
+        config.allow_account_override = True
         mock_client.alerts.get_alert_policies.return_value = PaginatedResult(items=[])
         handlers = ToolHandlers(mock_client, config)
         await handlers.handle_tool_call("list_alert_policies", {"account_id": "7654321"})
