@@ -3,7 +3,6 @@
 import logging
 
 from mcp.types import Resource
-from pydantic import AnyUrl
 
 from ..client import NewRelicClient
 from ..config import NewRelicConfig
@@ -26,40 +25,40 @@ class ResourceHandlers:
     def get_resources() -> list[Resource]:
         return [
             Resource(
-                uri=AnyUrl("newrelic://applications"),
+                uri="newrelic://applications",
                 name="New Relic Applications",
                 description="List of applications monitored by New Relic",
-                mimeType="application/json",
+                mime_type="application/json",
             ),
             Resource(
-                uri=AnyUrl("newrelic://incidents/recent"),
+                uri="newrelic://incidents/recent",
                 name="Recent Incidents",
                 description="Recent incidents from New Relic",
-                mimeType="application/json",
+                mime_type="application/json",
             ),
             Resource(
-                uri=AnyUrl("newrelic://dashboards"),
+                uri="newrelic://dashboards",
                 name="New Relic Dashboards",
                 description="List of available dashboards",
-                mimeType="application/json",
+                mime_type="application/json",
             ),
             Resource(
-                uri=AnyUrl("newrelic://alerts/policies"),
+                uri="newrelic://alerts/policies",
                 name="Alert Policies",
                 description="List of alert policies and their configurations",
-                mimeType="application/json",
+                mime_type="application/json",
             ),
             Resource(
-                uri=AnyUrl("newrelic://alerts/conditions"),
+                uri="newrelic://alerts/conditions",
                 name="Alert Conditions",
                 description="List of all alert conditions across policies",
-                mimeType="application/json",
+                mime_type="application/json",
             ),
             Resource(
-                uri=AnyUrl("newrelic://alerts/workflows"),
+                uri="newrelic://alerts/workflows",
                 name="Alert Workflows",
                 description="List of alert workflows and notification configurations",
-                mimeType="application/json",
+                mime_type="application/json",
             ),
         ]
 

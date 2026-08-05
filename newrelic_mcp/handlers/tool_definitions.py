@@ -267,7 +267,7 @@ def get_monitoring_tools() -> list[Tool]:
                 "Use LIMIT to cap result rows (default is 10 for FACET queries). "
                 "Time range formats: SINCE 1 hour ago, SINCE '2024-01-15 00:00:00', SINCE timestamp."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "NRQL query to execute"},
@@ -282,7 +282,7 @@ def get_monitoring_tools() -> list[Tool]:
         Tool(
             name="get_app_performance",
             description="Get performance metrics for a specific application",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "app_name": {"type": "string", "description": "Name of the application"},
@@ -294,7 +294,7 @@ def get_monitoring_tools() -> list[Tool]:
         Tool(
             name="get_app_errors",
             description="Get error metrics for a specific application",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "app_name": {"type": "string", "description": "Name of the application"},
@@ -306,7 +306,7 @@ def get_monitoring_tools() -> list[Tool]:
         Tool(
             name="get_incidents",
             description="Get recent incidents from New Relic",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {"hours": _hours_property(24)},
             },
@@ -314,7 +314,7 @@ def get_monitoring_tools() -> list[Tool]:
         Tool(
             name="get_infrastructure_hosts",
             description="Get infrastructure hosts and their metrics",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {"hours": _hours_property(1)},
             },
@@ -322,7 +322,7 @@ def get_monitoring_tools() -> list[Tool]:
         Tool(
             name="get_alert_violations",
             description="Get recent alert violations and incidents",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {"hours": _hours_property(24)},
             },
@@ -330,7 +330,7 @@ def get_monitoring_tools() -> list[Tool]:
         Tool(
             name="get_deployments",
             description="Get deployment markers and their impact",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "app_name": {
@@ -354,7 +354,7 @@ def get_dashboard_tools() -> list[Tool]:
         Tool(
             name="get_dashboards",
             description="Get New Relic dashboards (max 200 due to API limits). Use search parameter to find specific dashboards efficiently.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "search": {
@@ -374,7 +374,7 @@ def get_dashboard_tools() -> list[Tool]:
         Tool(
             name="create_dashboard",
             description="Create a new New Relic dashboard",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Name of the dashboard"},
@@ -388,7 +388,7 @@ def get_dashboard_tools() -> list[Tool]:
             description=(
                 "Rename a dashboard and/or update its description by GUID. Pages and widgets are preserved unchanged."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "GUID of the dashboard to update"},
@@ -408,7 +408,7 @@ def get_dashboard_tools() -> list[Tool]:
 Without `layout`, New Relic auto-places the widget full-size at the bottom — fine for one-offs, wrong for designed
 dashboards. Compact KPI billboard: `{{"column": 1, "row": 1, "width": 2, "height": 2}}`; chart in a 3-across row:
 `{{"column": 5, "row": 4, "width": 4, "height": 3}}`.""",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "dashboard_guid": {"type": "string", "description": "GUID of the dashboard to add widget to"},
@@ -434,7 +434,7 @@ dashboards. Compact KPI billboard: `{{"column": 1, "row": 1, "width": 2, "height
         Tool(
             name="get_dashboard_widgets",
             description="Get all widgets from a dashboard with their details and IDs",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "dashboard_guid": {"type": "string", "description": "Dashboard GUID to get widgets from"}
@@ -453,7 +453,7 @@ See the add_widget_to_dashboard description for the full rawConfiguration refere
 Update-specific notes:
 - Omit `widget_type` to keep the widget's current visualization.
 - Omit `layout` to keep the widget's current position and size.""",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "page_guid": {"type": "string", "description": "Page GUID where the widget is located"},
@@ -482,7 +482,7 @@ Update-specific notes:
         Tool(
             name="delete_widget",
             description="Delete a widget from a dashboard",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "page_guid": {"type": "string", "description": "Page GUID where the widget is located"},
@@ -494,7 +494,7 @@ Update-specific notes:
         Tool(
             name="delete_dashboard",
             description="Delete a dashboard by GUID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "dashboard_guid": {"type": "string", "description": "GUID of the dashboard to delete"},
@@ -511,7 +511,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="create_alert_policy",
             description="Create a new alert policy",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Name of the alert policy"},
@@ -528,7 +528,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="create_nrql_condition",
             description="Create a NRQL alert condition",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "policy_id": {"type": "string", "description": "Alert policy ID to attach the condition to"},
@@ -579,7 +579,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="create_notification_destination",
             description="Create a notification destination (email, webhook, Slack, etc.)",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Name of the destination"},
@@ -600,7 +600,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="create_notification_channel",
             description="Create a notification channel linked to a destination",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Name of the notification channel"},
@@ -627,7 +627,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="create_workflow",
             description="Create a workflow to connect alert policies to notification channels",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Name of the workflow"},
@@ -665,7 +665,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="update_alert_policy",
             description="Update an existing alert policy (name and/or incident preference)",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "policy_id": {"type": "string", "description": "ID of the alert policy to update"},
@@ -682,7 +682,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="delete_alert_policy",
             description="Delete an alert policy by ID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "policy_id": {"type": "string", "description": "ID of the alert policy to delete"},
@@ -693,7 +693,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="update_nrql_condition",
             description="Update an existing NRQL alert condition",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "condition_id": {"type": "string", "description": "ID of the condition to update"},
@@ -740,7 +740,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="delete_nrql_condition",
             description="Delete a NRQL alert condition by ID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "condition_id": {"type": "string", "description": "ID of the condition to delete"},
@@ -751,7 +751,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="delete_notification_destination",
             description="Delete a notification destination by ID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "destination_id": {"type": "string", "description": "ID of the destination to delete"},
@@ -762,7 +762,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="delete_notification_channel",
             description="Delete a notification channel by ID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "channel_id": {"type": "string", "description": "ID of the notification channel to delete"},
@@ -777,7 +777,7 @@ def get_alert_tools() -> list[Tool]:
                 "Use destination_configurations to replace the notification channels and "
                 "issues_filter to replace the filter."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "workflow_id": {"type": "string", "description": "ID of the workflow to update"},
@@ -831,7 +831,7 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="delete_workflow",
             description="Delete a workflow by ID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "workflow_id": {"type": "string", "description": "ID of the workflow to delete"},
@@ -852,7 +852,7 @@ def get_alert_tools() -> list[Tool]:
                 "Use schedule for recurring windows (DAILY, WEEKLY). "
                 "Condition attributes: policyId, policyName, conditionId, conditionName, entity.name, entity.type."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Name of the muting rule"},
@@ -880,7 +880,7 @@ def get_alert_tools() -> list[Tool]:
                 "Update an existing muting rule. Only the provided fields are changed; "
                 "condition and schedule shapes match create_muting_rule."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "rule_id": {"type": "string", "description": "ID of the muting rule to update"},
@@ -904,12 +904,12 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="list_muting_rules",
             description="List all muting rules in the account with their conditions and schedules",
-            inputSchema={"type": "object", "properties": {}},
+            input_schema={"type": "object", "properties": {}},
         ),
         Tool(
             name="delete_muting_rule",
             description="Delete a muting rule by ID",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "rule_id": {"type": "string", "description": "ID of the muting rule to delete"},
@@ -920,12 +920,12 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="list_alert_policies",
             description="List all alert policies in the account",
-            inputSchema={"type": "object", "properties": {}},
+            input_schema={"type": "object", "properties": {}},
         ),
         Tool(
             name="list_alert_conditions",
             description="List alert conditions with optional filters by policy, name, or NRQL query",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "policy_id": {
@@ -946,17 +946,17 @@ def get_alert_tools() -> list[Tool]:
         Tool(
             name="list_notification_destinations",
             description="List all notification destinations",
-            inputSchema={"type": "object", "properties": {}},
+            input_schema={"type": "object", "properties": {}},
         ),
         Tool(
             name="list_notification_channels",
             description="List all notification channels",
-            inputSchema={"type": "object", "properties": {}},
+            input_schema={"type": "object", "properties": {}},
         ),
         Tool(
             name="list_workflows",
             description="List all alert workflows",
-            inputSchema={"type": "object", "properties": {}},
+            input_schema={"type": "object", "properties": {}},
         ),
     ]
 
@@ -974,7 +974,7 @@ def get_entity_tools() -> list[Tool]:
                 "Use minimal_output=true to reduce response size (omits tags and type-specific fields). "
                 "Use limit to cap results (default 25, max 200)."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Entity name to search for (partial match)"},
@@ -1008,7 +1008,7 @@ def get_entity_tools() -> list[Tool]:
                 "account ID, domain (APM, EXT, INFRA, etc.), entity type (APPLICATION, KEY_TRANSACTION, HOST, etc.), "
                 "and domain ID. Useful for understanding what an entity GUID refers to without making an API call."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "The NR entity GUID to decode"},
@@ -1024,7 +1024,7 @@ def get_entity_tools() -> list[Tool]:
                 "metadata (language for APM apps, monitor type for synthetics, host metrics for infra). "
                 "Use entity_search to find GUIDs, or decode_entity_guid to inspect a GUID without an API call."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID to look up"},
@@ -1035,7 +1035,7 @@ def get_entity_tools() -> list[Tool]:
         Tool(
             name="get_entity_tags",
             description="Get all tags for a New Relic entity by its GUID. Use entity_search to find GUIDs.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
@@ -1046,7 +1046,7 @@ def get_entity_tools() -> list[Tool]:
         Tool(
             name="add_tags_to_entity",
             description="Add or update tags on a New Relic entity. Tags are key-value pairs.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
@@ -1058,7 +1058,7 @@ def get_entity_tools() -> list[Tool]:
         Tool(
             name="replace_tags_on_entity",
             description="Replace ALL tags on a New Relic entity (overwrites existing tags). Use add_tags_to_entity to append instead.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
@@ -1073,7 +1073,7 @@ def get_entity_tools() -> list[Tool]:
         Tool(
             name="delete_tags_from_entity",
             description="Delete tag keys (and all their values) from a New Relic entity.",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
@@ -1089,7 +1089,7 @@ def get_entity_tools() -> list[Tool]:
         Tool(
             name="delete_tag_values",
             description="Delete specific tag key-value pairs from an entity (keeps the key if other values remain).",
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
@@ -1108,7 +1108,7 @@ def get_entity_tools() -> list[Tool]:
                 "Shows objectives, target percentages, time windows, and the NRQL queries "
                 "used to measure good/valid events."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "account_id": _ACCOUNT_ID_PROPERTY,
@@ -1122,7 +1122,7 @@ def get_entity_tools() -> list[Tool]:
                 "objectives, time windows) of the Service Level Indicators attached to an entity. "
                 "Accepts the GUID of the instrumented entity or of a SERVICE_LEVEL entity itself."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "Entity GUID"},
@@ -1138,7 +1138,7 @@ def get_entity_tools() -> list[Tool]:
                 "(it counts pre-aggregated data points, not requests): use GET_FIELD for "
                 "availability and GET_CDF_COUNT with a threshold for latency."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "entity_guid": {"type": "string", "description": "GUID of the entity to attach the SLI to"},
@@ -1159,7 +1159,7 @@ def get_entity_tools() -> list[Tool]:
                 "SLI may not reset the engine's computation pipeline; if numbers stay wrong after "
                 "an update, delete and recreate the SLI."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "SERVICE_LEVEL entity GUID"},
@@ -1177,7 +1177,7 @@ def get_entity_tools() -> list[Tool]:
                 "Delete a Service Level Indicator by its SERVICE_LEVEL entity GUID. "
                 "Requires the events-to-metrics delete capability on the account."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "guid": {"type": "string", "description": "SERVICE_LEVEL entity GUID"},
@@ -1192,7 +1192,7 @@ def get_entity_tools() -> list[Tool]:
                 "monitor type (simple, scripted browser, API test, etc.), check period, "
                 "and location health."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "account_id": _ACCOUNT_ID_PROPERTY,
@@ -1206,7 +1206,7 @@ def get_entity_tools() -> list[Tool]:
                 "Shows pass/fail per location, duration, and error messages. "
                 "Use list_synthetic_monitors to find monitor GUIDs."
             ),
-            inputSchema={
+            input_schema={
                 "type": "object",
                 "properties": {
                     "monitor_guid": {"type": "string", "description": "Synthetic monitor entity GUID"},
