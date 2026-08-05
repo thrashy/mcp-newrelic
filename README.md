@@ -147,6 +147,40 @@ export NEW_RELIC_REGION="US"  # US or EU
 export NEW_RELIC_TIMEOUT="30"
 ```
 
+### Keeping your API key out of config files
+
+The `env` blocks above store your key in plaintext wherever your MCP client keeps its config
+(`~/.claude.json`, `claude_desktop_config.json`, etc.). To keep it in an OS secret store instead,
+have the client resolve it at launch:
+
+```json
+{
+  "mcpServers": {
+    "newrelic": {
+      "command": "sh",
+      "args": ["-c", "NEW_RELIC_API_KEY=$(security find-generic-password -w -s NEW_RELIC_API_KEY -a $USER) exec uv run --directory /path/to/mcp-newrelic newrelic-mcp"],
+      "env": {
+        "NEW_RELIC_ACCOUNT_ID": "your-account-id"
+      }
+    }
+  }
+}
+```
+
+Store the key once with:
+
+```bash
+security add-generic-password -s NEW_RELIC_API_KEY -a "$USER" -w "NRAK-your-api-key"
+```
+
+Substitute your platform's secret store for `security`: `secret-tool lookup key newrelic` (Linux),
+`pass show newrelic/api-key`, `op read op://vault/newrelic/key` (1Password), or
+`vault kv get -field=api_key secret/newrelic`. The command substitution happens inside `sh`, so the
+key reaches the server's environment without ever appearing in its argv (and therefore not in `ps`).
+
+On Windows, `sh` isn't available — use a PowerShell wrapper instead. This also doesn't apply to the
+Docker setup below: the image has no secret-store client installed.
+
 ### Safety Controls
 
 The server is **read-only by default**. Write tools (create/update/delete) are blocked unless you
