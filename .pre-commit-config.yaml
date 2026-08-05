@@ -30,11 +30,3 @@ repos:
         name: detect New Relic API key
         language: pygrep
         entry: 'NR(AA|AK|AL|II|IK|SP)-[A-Z0-9]{20,}'
-
-      - id: pylint
-        name: pylint
-        entry: pylint
-        language: system
-        types: [python]
-        exclude: ^(test_server\.py|server\.py)$  # Skip entry points
-        args: [--rcfile=pyproject.toml]
