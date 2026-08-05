@@ -6,10 +6,22 @@ Supports querying applications, metrics, incidents, dashboards, and managing ale
 """
 
 import logging
+from typing import Any
 
-from mcp.server import Server
+from mcp.server import ServerRequestContext
+from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListResourcesResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
+    ReadResourceResult,
+    TextContent,
+    TextResourceContents,
+)
 
 from .client import NewRelicClient
 from .config import NewRelicConfig
@@ -19,12 +31,15 @@ from .handlers.tool_handlers import ToolHandlers
 
 logger = logging.getLogger(__name__)
 
+NOT_CONFIGURED_MESSAGE = (
+    "New Relic client not configured. Provide credentials via config file, command line, or environment variables."
+)
+
 
 class NewRelicMCPServer:
     """New Relic MCP Server implementation"""
 
     def __init__(self, config: NewRelicConfig | None = None):
-        self.server = Server("newrelic-mcp")
         self.config = config or NewRelicConfig.from_env()
         self.client: NewRelicClient | None = None
 
@@ -34,49 +49,55 @@ class NewRelicMCPServer:
         else:
             logger.warning("New Relic credentials not provided. Server will run with limited functionality.")
 
-        # Initialize handlers
         if self.client:
             self.resource_handlers = ResourceHandlers(self.client, self.config)
             self.tool_handlers = ToolHandlers(self.client, self.config)
 
-        self.setup_handlers()
+        self.server: Server[Any] = Server(
+            "newrelic-mcp",
+            on_list_resources=self.handle_list_resources,
+            on_read_resource=self.handle_read_resource,
+            on_list_tools=self.handle_list_tools,
+            on_call_tool=self.handle_call_tool,
+        )
 
-    def setup_handlers(self) -> None:
-        """Setup MCP server handlers"""
+    async def handle_list_resources(
+        self, _context: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+    ) -> ListResourcesResult:
+        """List available New Relic resources"""
+        if not self.client:
+            return ListResourcesResult(resources=[])
+        return ListResourcesResult(resources=self.resource_handlers.get_resources())
 
-        @self.server.list_resources()
-        async def handle_list_resources() -> list:
-            """List available New Relic resources"""
-            if not self.client:
-                return []
-            return self.resource_handlers.get_resources()
+    async def handle_read_resource(
+        self, _context: ServerRequestContext[Any], params: ReadResourceRequestParams
+    ) -> ReadResourceResult:
+        """Read a specific New Relic resource"""
+        if not self.client:
+            raise ValueError(NOT_CONFIGURED_MESSAGE)
+        uri = str(params.uri)
+        text = await self.resource_handlers.read_resource(uri)
+        return ReadResourceResult(
+            contents=[TextResourceContents(uri=uri, mime_type="application/json", text=text)],
+        )
 
-        @self.server.read_resource()
-        async def handle_read_resource(uri: str) -> str:
-            """Read a specific New Relic resource"""
-            if not self.client:
-                raise ValueError(
-                    "New Relic client not configured. Provide credentials via config file, command line, or environment variables."
-                )
-            return await self.resource_handlers.read_resource(uri)
+    async def handle_list_tools(
+        self, _context: ServerRequestContext[Any], _params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        """List available New Relic tools"""
+        return ListToolsResult(tools=get_all_tools())
 
-        @self.server.list_tools()
-        async def handle_list_tools() -> list:
-            """List available New Relic tools"""
-            return get_all_tools()
-
-        @self.server.call_tool()
-        async def handle_call_tool(name: str, arguments: dict) -> list:
-            """Handle tool calls"""
-            if not self.client:
-                return [
-                    TextContent(
-                        type="text",
-                        text="Error: New Relic client not configured. Provide credentials via config file, command line, or environment variables.",
-                    )
-                ]
-
-            return await self.tool_handlers.handle_tool_call(name, arguments)
+    async def handle_call_tool(
+        self, _context: ServerRequestContext[Any], params: CallToolRequestParams
+    ) -> CallToolResult:
+        """Handle tool calls"""
+        if not self.client:
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error: {NOT_CONFIGURED_MESSAGE}")],
+                is_error=True,
+            )
+        content = await self.tool_handlers.handle_tool_call(params.name, params.arguments or {})
+        return CallToolResult(content=list(content))
 
     async def run(self) -> None:
         """Run the MCP server"""
