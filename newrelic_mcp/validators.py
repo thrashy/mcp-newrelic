@@ -20,8 +20,8 @@ _GUID_PATTERN = re.compile(r"^[A-Za-z0-9+/=]+$")
 class InputValidator:
     """Validates and sanitizes user inputs"""
 
-    @classmethod
-    def validate_nrql_query(cls, query: str) -> str:
+    @staticmethod
+    def validate_nrql_query(query: str) -> str:
         """Validate and sanitize NRQL query"""
         if not query:
             raise ValidationError("NRQL query cannot be empty")
@@ -34,8 +34,8 @@ class InputValidator:
 
         return query.strip()
 
-    @classmethod
-    def validate_guid(cls, guid: str) -> str:
+    @staticmethod
+    def validate_guid(guid: str) -> str:
         """Validate New Relic GUID format"""
         if not guid:
             raise ValidationError("GUID cannot be empty")
@@ -48,8 +48,8 @@ class InputValidator:
 
         return guid
 
-    @classmethod
-    def validate_app_name(cls, app_name: str) -> str:
+    @staticmethod
+    def validate_app_name(app_name: str) -> str:
         """Validate application name"""
         if not app_name:
             raise ValidationError("Application name cannot be empty")
@@ -60,8 +60,8 @@ class InputValidator:
         # Basic sanitization
         return app_name.strip()
 
-    @classmethod
-    def validate_time_range(cls, hours: int) -> int:
+    @staticmethod
+    def validate_time_range(hours: int) -> int:
         """Validate time range parameters"""
         if not isinstance(hours, int):
             raise ValidationError("Time range must be an integer")

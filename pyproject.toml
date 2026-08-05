@@ -7,10 +7,8 @@ license = {text = "MIT"}
 authors = [{name = "thrashy"}]
 requires-python = ">=3.11"
 dependencies = [
-    # Upper bounds keep the weekly automated update from pulling a breaking major
     "mcp>=2.0.0,<3.0.0",
     "httpx>=0.25.0,<1.0.0",
-    "pydantic>=2.0.0,<3.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
 ]
 
@@ -46,7 +44,7 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.format]
-# ruff 0.16+ formats Markdown; keep hand-laid-out doc examples as written
+# ruff formats fenced Python inside Markdown; doc examples are laid out by hand
 exclude = ["*.md"]
 
 [tool.ruff.lint]

@@ -25,10 +25,10 @@ def config() -> NewRelicConfig:
 
 @pytest.fixture
 def mock_client():
-    """Client mock autospec'd from the real classes, so a renamed or typo'd method fails loudly.
+    """Client mock autospec'd from the real classes.
 
-    Sub-clients are assigned explicitly because they are instance attributes set in
-    NewRelicClient.__init__, which autospec cannot see from the class alone.
+    Sub-clients are assigned separately because they are instance attributes set in
+    NewRelicClient.__init__, which autospec cannot discover from the class alone.
     """
     client = create_autospec(NewRelicClient, instance=True)
     client.base = create_autospec(BaseNewRelicClient, instance=True)
