@@ -125,8 +125,7 @@ jobs:
           gh pr create \
             --title "deps: Weekly dependency update" \
             --body-file update_summary.md \
-            --label dependencies,automated \
-            --assignee @me
+            --label dependencies,automated
 
       - name: No updates needed
         if: steps.update.outputs.has_changes == 'false'
