@@ -37,16 +37,12 @@ class AlertsClient:
 
         policy_input = {"name": name, "incidentPreference": incident_preference}
 
-        policy_result = await self._base.execute_mutation(
+        return await self._base.execute_mutation(
             mutation,
             {"accountId": int(account_id), "policy": policy_input},
             "alertsPolicyCreate",
             "create alert policy",
         )
-        if isinstance(policy_result, ApiError):
-            return policy_result
-
-        return policy_result
 
     async def create_nrql_condition(
         self,
@@ -106,16 +102,12 @@ class AlertsClient:
         if description:
             condition_config["description"] = description
 
-        condition_result = await self._base.execute_mutation(
+        return await self._base.execute_mutation(
             mutation,
             {"accountId": int(account_id), "policyId": policy_id, "condition": condition_config},
             "alertsNrqlConditionStaticCreate",
             "create NRQL condition",
         )
-        if isinstance(condition_result, ApiError):
-            return condition_result
-
-        return condition_result
 
     async def create_notification_destination(
         self, account_id: str, name: str, destination_type: str, properties: dict[str, Any]
@@ -564,16 +556,12 @@ class AlertsClient:
         if incident_preference is not None:
             policy_input["incidentPreference"] = incident_preference
 
-        policy_result = await self._base.execute_mutation(
+        return await self._base.execute_mutation(
             mutation,
             {"accountId": int(account_id), "id": policy_id, "policy": policy_input},
             "alertsPolicyUpdate",
             "update alert policy",
         )
-        if isinstance(policy_result, ApiError):
-            return policy_result
-
-        return policy_result
 
     async def delete_nrql_condition(self, account_id: str, condition_id: str) -> dict[str, Any] | ApiError:
         """Delete an alert condition"""
@@ -712,16 +700,12 @@ class AlertsClient:
                 }
             ]
 
-        condition_result = await self._base.execute_mutation(
+        return await self._base.execute_mutation(
             mutation,
             {"accountId": int(account_id), "id": condition_id, "condition": condition_config},
             "alertsNrqlConditionStaticUpdate",
             "update NRQL condition",
         )
-        if isinstance(condition_result, ApiError):
-            return condition_result
-
-        return condition_result
 
     async def delete_notification_destination(self, account_id: str, destination_id: str) -> dict[str, Any] | ApiError:
         """Delete a notification destination"""
@@ -809,13 +793,9 @@ class AlertsClient:
         if schedule:
             rule_input["schedule"] = schedule
 
-        rule_result = await self._base.execute_mutation(
+        return await self._base.execute_mutation(
             mutation, {"accountId": int(account_id), "rule": rule_input}, "alertsMutingRuleCreate", "create muting rule"
         )
-        if isinstance(rule_result, ApiError):
-            return rule_result
-
-        return rule_result
 
     async def get_muting_rules(self, account_id: str) -> PaginatedResult | ApiError:
         """Get all muting rules for the account"""
@@ -916,16 +896,12 @@ class AlertsClient:
         if schedule is not None:
             rule_input["schedule"] = schedule
 
-        rule_result = await self._base.execute_mutation(
+        return await self._base.execute_mutation(
             mutation,
             {"accountId": int(account_id), "id": rule_id, "rule": rule_input},
             "alertsMutingRuleUpdate",
             "update muting rule",
         )
-        if isinstance(rule_result, ApiError):
-            return rule_result
-
-        return rule_result
 
     async def delete_muting_rule(self, account_id: str, rule_id: str) -> dict[str, Any] | ApiError:
         """Delete a muting rule"""
