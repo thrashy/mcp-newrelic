@@ -26,6 +26,11 @@ repos:
 
   - repo: local
     hooks:
+      - id: detect-newrelic-key
+        name: detect New Relic API key
+        language: pygrep
+        entry: 'NR(AA|AK|AL|II|IK|SP)-[A-Z0-9]{20,}'
+
       - id: pylint
         name: pylint
         entry: pylint
