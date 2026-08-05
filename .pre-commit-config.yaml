@@ -21,8 +21,8 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
+        files: ^newrelic_mcp/
         additional_dependencies: [types-requests, httpx, pydantic]
-        exclude: ^(test_server\.py|server\.py)$  # Skip entry points
 
   - repo: local
     hooks:
