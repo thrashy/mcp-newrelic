@@ -5,6 +5,7 @@ from typing import Any
 
 from mcp.types import TextContent
 
+from ...types import ToolError
 from ...validators import InputValidator
 from .base import ToolHandlerStrategy
 
@@ -87,7 +88,7 @@ class DecodeEntityGuidHandler(ToolHandlerStrategy):
         try:
             decoded = self.client.base.decode_entity_guid(guid)
         except ValueError as e:
-            return self._create_error_response(str(e))
+            raise ToolError(str(e)) from e
 
         return self._create_success_response(
             f"Decoded entity GUID:\n"
@@ -173,7 +174,7 @@ class GetEntityTagsHandler(ToolHandlerStrategy):
         )
 
         if not entity:
-            return self._create_error_response(f"Entity not found for GUID: {guid}")
+            raise ToolError(f"Entity not found for GUID: {guid}")
 
         tags = entity.get("tags", [])
         name = entity.get("name", "Unknown")
@@ -409,7 +410,7 @@ class GetSyntheticResultsHandler(ToolHandlerStrategy):
         results = data.get("results", [])
 
         if not entity:
-            return self._create_error_response(f"Monitor not found for GUID: {monitor_guid}")
+            raise ToolError(f"Monitor not found for GUID: {monitor_guid}")
 
         name = entity.get("name", "Unknown")
         summary = entity.get("monitorSummary", {})

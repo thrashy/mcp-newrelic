@@ -15,16 +15,42 @@ def config_without_account() -> NewRelicConfig:
     return cfg
 
 
+class TestIsErrorFlag:
+    async def test_successful_call_is_not_flagged(self, mock_client, config):
+        mock_client.base.decode_entity_guid.return_value = DecodedEntityGuid(
+            account_id=12345, domain="APM", entity_type="APPLICATION", domain_id="67890"
+        )
+        handlers = ToolHandlers(mock_client, config)
+        result = await handlers.handle_tool_call("decode_entity_guid", {"guid": "someguid1234"})
+        assert result.is_error is False
+
+    async def test_unknown_tool_is_flagged(self, mock_client, config):
+        handlers = ToolHandlers(mock_client, config)
+        assert (await handlers.handle_tool_call("no_such_tool", {})).is_error is True
+
+    async def test_strategy_failure_is_flagged(self, mock_client, config):
+        mock_client.alerts.get_alert_policies.side_effect = RuntimeError("boom")
+        handlers = ToolHandlers(mock_client, config)
+        result = await handlers.handle_tool_call("list_alert_policies", {})
+        assert result.is_error is True
+        assert "boom" in result.content[0].text
+
+    async def test_gated_tool_is_flagged(self, mock_client, config):
+        handlers = ToolHandlers(mock_client, config)
+        result = await handlers.handle_tool_call("delete_dashboard", {"dashboard_guid": "MTIzNDU2Nzg5MA=="})
+        assert result.is_error is True
+
+
 class TestDispatch:
     async def test_unknown_tool_returns_error_text(self, mock_client, config):
         handlers = ToolHandlers(mock_client, config)
         result = await handlers.handle_tool_call("no_such_tool", {})
-        assert result[0].text == "Unknown tool: no_such_tool"
+        assert result.content[0].text == "Unknown tool: no_such_tool"
 
     async def test_missing_account_id_errors_cleanly(self, mock_client, config_without_account):
         handlers = ToolHandlers(mock_client, config_without_account)
         result = await handlers.handle_tool_call("list_alert_policies", {})
-        assert "Account ID not provided" in result[0].text
+        assert "Account ID not provided" in result.content[0].text
         mock_client.alerts.get_alert_policies.assert_not_called()
 
     async def test_account_id_not_required_strategy_works_without_account(self, mock_client, config_without_account):
@@ -33,13 +59,13 @@ class TestDispatch:
         )
         handlers = ToolHandlers(mock_client, config_without_account)
         result = await handlers.handle_tool_call("decode_entity_guid", {"guid": "someguid1234"})
-        assert "Decoded entity GUID" in result[0].text
-        assert "12345" in result[0].text
+        assert "Decoded entity GUID" in result.content[0].text
+        assert "12345" in result.content[0].text
 
     async def test_account_id_override_blocked_by_default(self, mock_client, config):
         handlers = ToolHandlers(mock_client, config)
         result = await handlers.handle_tool_call("list_alert_policies", {"account_id": "7654321"})
-        assert "override is disabled" in result[0].text
+        assert "override is disabled" in result.content[0].text
         mock_client.alerts.get_alert_policies.assert_not_called()
 
     async def test_argument_account_id_overrides_config_when_enabled(self, mock_client, config):
@@ -59,5 +85,5 @@ class TestDispatch:
         mock_client.alerts.get_alert_policies.side_effect = RuntimeError("boom")
         handlers = ToolHandlers(mock_client, config)
         result = await handlers.handle_tool_call("list_alert_policies", {})
-        assert "Error executing list_alert_policies" in result[0].text
-        assert "boom" in result[0].text
+        assert "Error executing list_alert_policies" in result.content[0].text
+        assert "boom" in result.content[0].text

@@ -71,9 +71,9 @@ class TestEntitySearchHandler:
     async def test_error_from_client(self, mock_client, config):
         mock_client.entities.entity_search.return_value = ApiError("search failed")
         handler = EntitySearchHandler(mock_client, config)
-        result = await handler.handle({}, "1234567")
 
-        assert "Error" in result[0].text
+        with pytest.raises(ToolError, match="search failed"):
+            await handler.handle({}, "1234567")
 
 
 class TestGetEntityTagsHandler:
@@ -97,9 +97,9 @@ class TestGetEntityTagsHandler:
     async def test_entity_not_found(self, mock_client, config):
         mock_client.entities.get_entity_tags.return_value = None
         handler = GetEntityTagsHandler(mock_client, config)
-        result = await handler.handle({"guid": "YmFkR3VpZFRlc3Q="}, "1234567")
 
-        assert "Error" in result[0].text
+        with pytest.raises(ToolError, match="Entity not found"):
+            await handler.handle({"guid": "YmFkR3VpZFRlc3Q="}, "1234567")
 
     async def test_entity_no_tags(self, mock_client, config):
         mock_client.entities.get_entity_tags.return_value = {"name": "svc", "entityType": "APM", "tags": []}
@@ -181,9 +181,9 @@ class TestListServiceLevelsHandler:
     async def test_error_from_client(self, mock_client, config):
         mock_client.entities.list_service_levels.return_value = ApiError("failed")
         handler = ListServiceLevelsHandler(mock_client, config)
-        result = await handler.handle({}, "1234567")
 
-        assert "Error" in result[0].text
+        with pytest.raises(ToolError, match="failed"):
+            await handler.handle({}, "1234567")
 
 
 class TestGetServiceLevelHandler:
@@ -283,9 +283,9 @@ class TestListSyntheticMonitorsHandler:
     async def test_error_from_client(self, mock_client, config):
         mock_client.entities.list_synthetic_monitors.return_value = ApiError("failed")
         handler = ListSyntheticMonitorsHandler(mock_client, config)
-        result = await handler.handle({}, "1234567")
 
-        assert "Error" in result[0].text
+        with pytest.raises(ToolError, match="failed"):
+            await handler.handle({}, "1234567")
 
 
 class TestReplaceTagsHandler:
@@ -359,9 +359,9 @@ class TestGetSyntheticResultsHandler:
     async def test_entity_not_found(self, mock_client, config):
         mock_client.entities.get_synthetic_results.return_value = {"entity": {}, "results": []}
         handler = GetSyntheticResultsHandler(mock_client, config)
-        result = await handler.handle({"monitor_guid": "YmFkR3VpZFRlc3Q="}, "1234567")
 
-        assert "Error" in result[0].text
+        with pytest.raises(ToolError, match="Monitor not found"):
+            await handler.handle({"monitor_guid": "YmFkR3VpZFRlc3Q="}, "1234567")
 
     async def test_no_results(self, mock_client, config):
         mock_client.entities.get_synthetic_results.return_value = {
@@ -396,9 +396,8 @@ class TestDecodeEntityGuidHandler:
     async def test_invalid_guid_returns_error_text(self, mock_client, config):
         mock_client.base.decode_entity_guid.side_effect = ValueError("not valid base64")
         handler = DecodeEntityGuidHandler(mock_client, config)
-        result = await handler.handle({"guid": "bad"}, "")
-        assert result[0].text.startswith("Error")
-        assert "not valid base64" in result[0].text
+        with pytest.raises(ToolError, match="not valid base64"):
+            await handler.handle({"guid": "bad"}, "")
 
 
 class TestGetEntityHandler:

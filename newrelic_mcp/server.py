@@ -96,8 +96,7 @@ class NewRelicMCPServer:
                 content=[TextContent(type="text", text=f"Error: {NOT_CONFIGURED_MESSAGE}")],
                 is_error=True,
             )
-        content = await self.tool_handlers.handle_tool_call(params.name, params.arguments or {})
-        return CallToolResult(content=list(content))
+        return await self.tool_handlers.handle_tool_call(params.name, params.arguments or {})
 
     async def run(self) -> None:
         """Run the MCP server"""

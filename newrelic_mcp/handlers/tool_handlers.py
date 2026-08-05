@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from mcp.types import TextContent
+from mcp.types import CallToolResult, TextContent
 
 from ..client import NewRelicClient
 from ..config import NewRelicConfig
@@ -197,28 +197,32 @@ class ToolHandlers:
             "get_synthetic_results": GetSyntheticResultsHandler(client, config),
         }
 
-    async def handle_tool_call(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    async def handle_tool_call(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
         try:
             strategy = self._strategies.get(name)
             if strategy is None:
-                return [TextContent(type="text", text=f"Unknown tool: {name}")]
+                return self._failure(f"Unknown tool: {name}")
 
             access_error = self._validate_tool_access(name)
             if access_error:
-                return [TextContent(type="text", text=f"Error: {access_error}")]
+                return self._failure(f"Error: {access_error}")
 
             account_id, account_error = self._resolve_account_id(arguments, strategy.requires_account_id)
             if account_error:
-                return [TextContent(type="text", text=f"Error: {account_error}")]
+                return self._failure(f"Error: {account_error}")
 
-            return await strategy.handle(arguments, account_id or "")
+            return CallToolResult(content=list(await strategy.handle(arguments, account_id or "")))
 
         except (ValidationError, ToolError) as e:
-            return [TextContent(type="text", text=f"Error: {redact_secrets(str(e))}")]
+            return self._failure(f"Error: {redact_secrets(str(e))}")
         except Exception as e:
             message = redact_secrets(str(e))
             logger.error("Error calling tool %s: %s", name, message)
-            return [TextContent(type="text", text=f"Error executing {name}: {message}")]
+            return self._failure(f"Error executing {name}: {message}")
+
+    @staticmethod
+    def _failure(text: str) -> CallToolResult:
+        return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
 
     def _validate_tool_access(self, name: str) -> str | None:
         """Enforce allow/deny lists and write/destructive gating. Returns an error message or None."""

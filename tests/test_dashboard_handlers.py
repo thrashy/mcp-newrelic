@@ -241,9 +241,8 @@ class TestUpdateDashboardHandler:
 
     async def test_requires_name_or_description(self, mock_client, config):
         handler = UpdateDashboardHandler(mock_client, config)
-        result = await handler.handle({"guid": "dashguid123456"}, "")
-        assert result[0].text.startswith("Error")
-        assert "name" in result[0].text and "description" in result[0].text
+        with pytest.raises(ToolError, match="name.*description"):
+            await handler.handle({"guid": "dashguid123456"}, "")
         mock_client.dashboards.update_dashboard.assert_not_called()
 
     async def test_error_propagated(self, mock_client, config):

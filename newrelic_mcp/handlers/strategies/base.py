@@ -28,11 +28,6 @@ class ToolHandlerStrategy(ABC):
         """Handle the tool execution"""
 
     @staticmethod
-    def _create_error_response(message: str) -> list[TextContent]:
-        """Create standardized error response"""
-        return [TextContent(type="text", text=f"Error: {message}")]
-
-    @staticmethod
     def _create_success_response(message: str) -> list[TextContent]:
         """Create standardized success response"""
         return [TextContent(type="text", text=message)]
@@ -68,7 +63,7 @@ class ToolHandlerStrategy(ABC):
     ) -> list[TextContent]:
         """Handle common list response pattern: check error, check empty, format items."""
         if isinstance(result, ApiError):
-            return self._create_error_response(f"{error_context}: {result.message}")
+            raise ToolError(f"{error_context}: {result.message}")
         items = result.items if isinstance(result, PaginatedResult) else result
         if not items:
             return self._create_success_response(empty_message)

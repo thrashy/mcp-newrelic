@@ -101,8 +101,8 @@ class TestListAlertPoliciesHandler:
     async def test_error_from_client(self, mock_client, config):
         mock_client.alerts.get_alert_policies.return_value = ApiError("unauthorized")
         handler = ListAlertPoliciesHandler(mock_client, config)
-        result = await handler.handle({}, "1234567")
-        assert result[0].text.startswith("Error")
+        with pytest.raises(ToolError, match="unauthorized"):
+            await handler.handle({}, "1234567")
 
 
 class TestListAlertConditionsHandler:
@@ -347,8 +347,8 @@ class TestListMutingRulesHandler:
     async def test_error_from_client(self, mock_client, config):
         mock_client.alerts.get_muting_rules.return_value = ApiError("unauthorized")
         handler = ListMutingRulesHandler(mock_client, config)
-        result = await handler.handle({}, "1234567")
-        assert result[0].text.startswith("Error")
+        with pytest.raises(ToolError, match="unauthorized"):
+            await handler.handle({}, "1234567")
 
 
 class TestDeleteMutingRuleHandler:

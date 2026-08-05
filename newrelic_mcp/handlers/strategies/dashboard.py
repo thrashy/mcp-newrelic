@@ -4,7 +4,7 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from ...types import ApiError
+from ...types import ApiError, ToolError
 from ...utils.dashboard_formatters import (
     build_raw_nrql_queries,
     build_widget_configuration,
@@ -78,7 +78,7 @@ class UpdateDashboardHandler(ToolHandlerStrategy):
         description = arguments.get("description")
 
         if name is None and description is None:
-            return self._create_error_response("Provide at least one of 'name' or 'description' to update.")
+            raise ToolError("Provide at least one of 'name' or 'description' to update.")
 
         result = self._unwrap(
             await self.client.dashboards.update_dashboard(dashboard_guid, name=name, description=description),
