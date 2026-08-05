@@ -1,12 +1,14 @@
 """Resource handlers for New Relic MCP Server."""
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from mcp.types import Resource
 
 from ..client import NewRelicClient
 from ..config import NewRelicConfig
-from ..types import ApiError
+from ..types import ApiError, PaginatedResult
 from ..utils.alert_formatters import format_alert_condition, format_alert_policy
 from ..utils.dashboard_formatters import format_dashboard_list
 from ..utils.error_handling import format_resource_error
@@ -111,51 +113,48 @@ class ResourceHandlers:
 
         return "# New Relic Dashboards\n\n" + format_dashboard_list(result.items)
 
-    async def _read_alert_policies(self, account_id: str) -> str:
-        result = await self.client.alerts.get_alert_policies(account_id)
-
+    @staticmethod
+    def _render_list(
+        result: PaginatedResult | ApiError,
+        *,
+        title: str,
+        noun: str,
+        format_item: Callable[[dict[str, Any]], str],
+    ) -> str:
         if isinstance(result, ApiError):
-            return format_resource_error(result, "Alert Policies")
-
+            return format_resource_error(result, title)
         if not result.items:
-            return "# Alert Policies\n\nNo alert policies found."
+            return f"# {title}\n\nNo {noun} found."
+        header = f"# {title}\n\n{result.total_count or len(result.items)} {noun} found:\n\n"
+        return header + "".join(format_item(item) for item in result.items)
 
-        policies_list = f"# Alert Policies\n\n{result.total_count or len(result.items)} alert policies found:\n\n"
-        for policy in result.items:
-            policies_list += format_alert_policy(policy)
-
-        return policies_list
+    async def _read_alert_policies(self, account_id: str) -> str:
+        return self._render_list(
+            await self.client.alerts.get_alert_policies(account_id),
+            title="Alert Policies",
+            noun="alert policies",
+            format_item=format_alert_policy,
+        )
 
     async def _read_alert_conditions(self, account_id: str) -> str:
-        result = await self.client.alerts.get_alert_conditions(account_id)
-
-        if isinstance(result, ApiError):
-            return format_resource_error(result, "Alert Conditions")
-
-        if not result.items:
-            return "# Alert Conditions\n\nNo alert conditions found."
-
-        conditions_list = f"# Alert Conditions\n\n{result.total_count or len(result.items)} alert conditions found:\n\n"
-        for condition in result.items:
+        def format_with_policy_name(condition: dict[str, Any]) -> str:
             condition.setdefault("policyName", f"Policy {condition.get('policyId', 'Unknown')}")
-            conditions_list += format_alert_condition(condition)
+            return format_alert_condition(condition)
 
-        return conditions_list
+        return self._render_list(
+            await self.client.alerts.get_alert_conditions(account_id),
+            title="Alert Conditions",
+            noun="alert conditions",
+            format_item=format_with_policy_name,
+        )
 
     async def _read_alert_workflows(self, account_id: str) -> str:
-        result = await self.client.alerts.get_workflows(account_id)
-
-        if isinstance(result, ApiError):
-            return format_resource_error(result, "Alert Workflows")
-
-        if not result.items:
-            return "# Alert Workflows\n\nNo alert workflows found."
-
-        workflows_list = f"# Alert Workflows\n\n{result.total_count or len(result.items)} alert workflows found:\n\n"
-        for workflow in result.items:
-            workflows_list += self._format_workflow_info(workflow)
-
-        return workflows_list
+        return self._render_list(
+            await self.client.alerts.get_workflows(account_id),
+            title="Alert Workflows",
+            noun="alert workflows",
+            format_item=self._format_workflow_info,
+        )
 
     @staticmethod
     def _format_workflow_info(workflow: dict) -> str:
