@@ -44,6 +44,10 @@ testpaths = ["tests"]
 line-length = 120
 target-version = "py311"
 
+[tool.ruff.format]
+# ruff 0.16+ formats Markdown; keep hand-laid-out doc examples as written
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
