@@ -48,17 +48,8 @@ uv run mypy newrelic_mcp/
 # Run tests
 uv run pytest tests/
 
-# Run all quality checks
-uv run ruff check . && uv run mypy newrelic_mcp/ && uv run pylint newrelic_mcp/
-```
-
-### **Hatch Scripts**
-Convenience scripts are defined in `pyproject.toml` under `[tool.hatch.envs.dev.scripts]`:
-```bash
-uv run hatch run dev:lint        # Run ruff, mypy, and pylint
-uv run hatch run dev:format      # Format with ruff
-uv run hatch run dev:test        # Run pytest
-uv run hatch run dev:all-checks  # All checks including format verification
+# Run all quality checks (same gate as CI)
+uv run ruff check . && uv run ruff format --check . && uv run mypy newrelic_mcp/ && uv run pytest tests/
 ```
 
 ### **Testing**

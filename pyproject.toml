@@ -7,10 +7,11 @@ license = {text = "MIT"}
 authors = [{name = "thrashy"}]
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=2.0.0",
-    "httpx>=0.25.0",
-    "pydantic>=2.0.0",
-    "python-dotenv>=1.0.0",
+    # Upper bounds keep the weekly automated update from pulling a breaking major
+    "mcp>=2.0.0,<3.0.0",
+    "httpx>=0.25.0,<1.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
 ]
 
 [project.scripts]
@@ -101,19 +102,3 @@ max-line-length = 120
 max-args = 8
 max-locals = 20
 max-branches = 15
-
-# Development scripts for easy access
-[tool.hatch.envs.dev.scripts]
-lint = [
-    "ruff check .",
-    "mypy newrelic_mcp/",
-    "pylint newrelic_mcp/",
-]
-format = "ruff format ."
-test = "pytest"
-all-checks = [
-    "ruff check .",
-    "ruff format --check .",
-    "mypy newrelic_mcp/",
-    "pylint newrelic_mcp/",
-]
