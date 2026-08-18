@@ -55,6 +55,8 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy newrelic_mcp/
 ### **Testing**
 Tests use `pytest` with `pytest-asyncio` for async test support. The `asyncio_mode = "auto"` setting in `pyproject.toml` means async test methods are detected automatically — no `@pytest.mark.asyncio` decorator needed.
 
+`tests/test_live_contract.py` asserts that every NRDB attribute the server reads actually exists in a real account. Mocked tests cannot catch that class of bug: a hand-written fixture and the code under test share the same assumption, so both agree while the tool silently renders `Unknown`. Add an entry to `REQUIRED_ATTRIBUTES` whenever a query or formatter starts depending on a new attribute.
+
 ```bash
 # Run all tests
 uv run pytest tests/
@@ -67,6 +69,9 @@ uv run pytest tests/test_base_client.py
 
 # Stop on first failure
 uv run pytest tests/ -x -q
+
+# Contract tests against a real New Relic account (skipped by default)
+RUN_LIVE_TESTS=1 NEW_RELIC_API_KEY=... NEW_RELIC_ACCOUNT_ID=... uv run pytest tests/test_live_contract.py
 ```
 
 ### **IDE Integration**
