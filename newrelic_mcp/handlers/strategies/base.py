@@ -34,8 +34,15 @@ class ToolHandlerStrategy(ABC):
 
     @staticmethod
     def _format_duration(duration: Any) -> str:
-        """Format a duration value with ms units, or N/A if unavailable"""
-        return f"{duration:.2f}ms" if isinstance(duration, int | float) else "N/A"
+        """Format an NRQL duration (seconds) as ms, or N/A if unavailable.
+
+        percentile() results arrive as a single-entry dict keyed by the percentile.
+        """
+        if isinstance(duration, dict):
+            duration = next(iter(duration.values()), None)
+        if isinstance(duration, bool) or not isinstance(duration, int | float):
+            return "N/A"
+        return f"{duration * 1000:.2f}ms"
 
     @staticmethod
     def _format_tag_str(tags: list[dict[str, str]]) -> str:

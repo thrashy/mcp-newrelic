@@ -142,7 +142,11 @@ class MonitoringClient:
         """Get deployment markers and their impact"""
         if app_name:
             safe_name = escape_nrql_string(app_name)
-            primary = f"SELECT * FROM Deployment WHERE appName = '{safe_name}' SINCE {hours} hours ago LIMIT 20"
+            primary = (
+                f"SELECT * FROM Deployment "
+                f"WHERE entity.name = '{safe_name}' OR appName = '{safe_name}' "
+                f"SINCE {hours} hours ago LIMIT 20"
+            )
             fallback = (
                 f"SELECT count(*) as transaction_count, average(duration) as avg_duration "
                 f"FROM Transaction WHERE appName = '{safe_name}' "

@@ -164,11 +164,14 @@ class DeploymentsHandler(ToolHandlerStrategy):
 
     @staticmethod
     def _format_deployment(deployment: dict[str, Any]) -> str:
-        app = deployment.get("appName", "Unknown App")
+        app = deployment.get("entity.name") or deployment.get("appName") or "Unknown App"
         timestamp = deployment.get("timestamp", deployment.get("createdAt", "Unknown"))
-        revision = deployment.get("revision", "Unknown")
+        revision = deployment.get("revision") or deployment.get("version") or deployment.get("commit") or "Unknown"
         description = deployment.get("description", "")
+        user = deployment.get("user", "")
         text = f"- **{app}**\n  Time: {timestamp}\n  Revision: {revision}\n"
+        if user:
+            text += f"  User: {user}\n"
         if description:
             text += f"  Description: {description}\n"
         return text + "\n"

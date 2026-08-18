@@ -154,6 +154,14 @@ class TestGetDeployments:
         deployments = await client.get_deployments("1234567", None, 168)
         assert deployments == []
 
+    async def test_matches_change_tracking_entity_name(self):
+        client = _make_client()
+        client._base.query_nrql.return_value = _nrql_response([])
+        await client.get_deployments("1234567", "MyApp", 168)
+        nrql = client._base.query_nrql.await_args.args[1]
+        assert "entity.name = 'MyApp'" in nrql
+        assert "appName = 'MyApp'" in nrql
+
     async def test_fallback_on_error(self):
         client = _make_client()
         client._base.query_nrql = AsyncMock(

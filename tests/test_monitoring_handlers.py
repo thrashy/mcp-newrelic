@@ -41,8 +41,8 @@ class TestQueryNRQLHandler:
 class TestAppPerformanceHandler:
     async def test_success_formats_metrics(self, mock_client, config):
         mock_client.monitoring.get_performance_metrics.return_value = {
-            "avg_duration": 120.5,
-            "p95_duration": 450.0,
+            "avg_duration": 0.1205,
+            "p95_duration": {"95": 0.45},
             "throughput": 35.2,
         }
         handler = AppPerformanceHandler(mock_client, config)
@@ -69,7 +69,7 @@ class TestAppPerformanceHandler:
 
 class TestAppErrorsHandler:
     async def test_success_formats_error_count(self, mock_client, config):
-        mock_client.monitoring.get_error_metrics.return_value = {"error_count": 42, "avg_duration": 200.0}
+        mock_client.monitoring.get_error_metrics.return_value = {"error_count": 42, "avg_duration": 0.2}
         handler = AppErrorsHandler(mock_client, config)
         result = await handler.handle({"app_name": "MyApp", "hours": 2}, "1234567")
 
@@ -152,3 +152,20 @@ class TestDeploymentsHandler:
         assert "MyApp" in result[0].text
         assert "abc123" in result[0].text
         assert "v2 release" in result[0].text
+
+    async def test_change_tracking_deployment_rendered(self, mock_client, config):
+        mock_client.monitoring.get_deployments.return_value = [
+            {
+                "entity.name": "example-api_prod",
+                "timestamp": 1700000000000,
+                "version": "origin/prod-release",
+                "user": "thrashy",
+                "description": "prod release",
+            }
+        ]
+        handler = DeploymentsHandler(mock_client, config)
+        result = await handler.handle({}, "1234567")
+        assert "example-api_prod" in result[0].text
+        assert "origin/prod-release" in result[0].text
+        assert "thrashy" in result[0].text
+        assert "Unknown App" not in result[0].text
