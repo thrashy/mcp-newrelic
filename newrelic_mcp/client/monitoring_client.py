@@ -56,12 +56,18 @@ class MonitoringClient:
         except API_ERRORS as e:
             return handle_api_error("get applications", e)
 
-    async def get_recent_incidents(self, account_id: str, hours: int = 24) -> list[dict[str, Any]] | ApiError:
-        """Get recent incidents"""
+    async def get_recent_incidents(
+        self, account_id: str, hours: int = 24, app_name: str | None = None
+    ) -> list[dict[str, Any]] | ApiError:
+        """Get recent incidents, optionally scoped to one entity"""
+        where = ""
+        if app_name:
+            safe_name = escape_nrql_string(app_name)
+            where = f"WHERE entity.name = '{safe_name}' OR targetName = '{safe_name}' "
         return await self._query_nrql_with_fallback(
             account_id,
-            f"SELECT * FROM NrAiIncident SINCE {hours} hours ago LIMIT 50",
-            f"SELECT * FROM Alert SINCE {hours} hours ago LIMIT 50",
+            f"SELECT * FROM NrAiIncident {where}SINCE {hours} hours ago LIMIT 50",
+            f"SELECT * FROM Alert {where}SINCE {hours} hours ago LIMIT 50",
             "get incidents",
         )
 
@@ -131,7 +137,7 @@ class MonitoringClient:
         """Get recent alert violations"""
         return await self._query_nrql_with_fallback(
             account_id,
-            (f"SELECT * FROM NrAiIncident WHERE state IN ('ACTIVATED', 'CLOSED') SINCE {hours} hours ago LIMIT 50"),
+            (f"SELECT * FROM NrAiIncident WHERE event IN ('open', 'close') SINCE {hours} hours ago LIMIT 50"),
             f"SELECT * FROM AlertEvent SINCE {hours} hours ago LIMIT 50",
             "get alert violations",
         )

@@ -135,6 +135,26 @@ class TestAlertViolationsHandler:
         assert "CRITICAL" in result[0].text
 
 
+class TestIncidentsFormatting:
+    async def test_uses_event_and_priority(self, mock_client, config):
+        mock_client.monitoring.get_recent_incidents.return_value = [
+            {
+                "title": "P99 Latency",
+                "event": "open",
+                "priority": "critical",
+                "entity.name": "example-api_prod",
+                "timestamp": 1700000000000,
+            }
+        ]
+        handler = IncidentsHandler(mock_client, config)
+        result = await handler.handle({"app_name": "example-api_prod"}, "1234567")
+        text = result[0].text
+        assert "open" in text
+        assert "critical" in text
+        assert "example-api_prod" in text
+        assert "State: Unknown" not in text
+
+
 class TestDeploymentsHandler:
     async def test_no_deployments_with_app_name(self, mock_client, config):
         mock_client.monitoring.get_deployments.return_value = []

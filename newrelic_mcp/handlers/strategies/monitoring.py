@@ -78,20 +78,28 @@ class IncidentsHandler(ToolHandlerStrategy):
 
     async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         hours = InputValidator.validate_time_range(arguments.get("hours", 24))
-        result = await self.client.monitoring.get_recent_incidents(account_id, hours)
+        app_name = arguments.get("app_name")
+        if app_name:
+            app_name = InputValidator.validate_app_name(app_name)
+
+        scope = f" for {app_name}" if app_name else ""
+        result = await self.client.monitoring.get_recent_incidents(account_id, hours, app_name)
         return self._handle_list_response(
             result,
             error_context="getting incidents",
-            empty_message=f"No incidents found in the last {hours} hours.",
-            item_noun=f"incidents in the last {hours} hours",
+            empty_message=f"No incidents found{scope} in the last {hours} hours.",
+            item_noun=f"incidents{scope} in the last {hours} hours",
             format_item=self._format_incident,
         )
 
     @staticmethod
     def _format_incident(incident: dict[str, Any]) -> str:
+        state = incident.get("event") or incident.get("state") or "Unknown"
+        entity = incident.get("entity.name") or incident.get("targetName") or "Unknown"
         return (
             f"- **{incident.get('title', 'Unknown')}**\n"
-            f"  State: {incident.get('state', 'Unknown')}\n"
+            f"  Entity: {entity}\n"
+            f"  State: {state}  Priority: {incident.get('priority', 'Unknown')}\n"
             f"  Time: {incident.get('timestamp', 'Unknown')}\n\n"
         )
 

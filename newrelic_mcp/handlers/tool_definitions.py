@@ -308,7 +308,15 @@ def get_monitoring_tools() -> list[Tool]:
             description="Get recent incidents from New Relic",
             input_schema={
                 "type": "object",
-                "properties": {"hours": _hours_property(24)},
+                "properties": {
+                    "app_name": {
+                        "type": "string",
+                        "description": (
+                            "Entity name to scope incidents to (optional, gets all incidents if not provided)"
+                        ),
+                    },
+                    "hours": _hours_property(24),
+                },
             },
         ),
         Tool(

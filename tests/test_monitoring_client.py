@@ -49,6 +49,20 @@ class TestGetRecentIncidents:
         assert len(incidents) == 1
         assert incidents[0]["title"] == "Alert fallback"
 
+    async def test_scopes_to_entity_name(self):
+        client = _make_client()
+        client._base.query_nrql.return_value = _nrql_response([])
+        await client.get_recent_incidents("1234567", 24, "MyApp")
+        nrql = client._base.query_nrql.await_args.args[1]
+        assert "entity.name = 'MyApp'" in nrql
+        assert "targetName = 'MyApp'" in nrql
+
+    async def test_unscoped_has_no_where(self):
+        client = _make_client()
+        client._base.query_nrql.return_value = _nrql_response([])
+        await client.get_recent_incidents("1234567", 24)
+        assert "WHERE" not in client._base.query_nrql.await_args.args[1]
+
     async def test_both_queries_fail(self):
         client = _make_client()
         client._base.query_nrql = AsyncMock(side_effect=ValueError("fail"))
