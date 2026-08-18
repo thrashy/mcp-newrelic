@@ -145,7 +145,7 @@ class AlertViolationsHandler(ToolHandlerStrategy):
     @staticmethod
     def _format_violation(violation: dict[str, Any]) -> str:
         title = violation.get("title", violation.get("name", "Unknown Alert"))
-        state = violation.get("state", "Unknown")
+        state = violation.get("event") or violation.get("state") or "Unknown"
         timestamp = violation.get("timestamp", violation.get("createdAt", "Unknown"))
         priority = violation.get("priority", violation.get("priority_level", "Unknown"))
         return f"- **{title}**\n  State: {state}\n  Priority: {priority}\n  Time: {timestamp}\n\n"
