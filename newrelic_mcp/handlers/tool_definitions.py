@@ -33,6 +33,26 @@ _WIDGET_LAYOUT_SCHEMA: dict[str, Any] = {
     "required": ["column", "row", "width", "height"],
 }
 
+_PERMISSIONS_PROPERTY: dict[str, Any] = {
+    "type": "string",
+    "enum": ["PUBLIC_READ_WRITE", "PUBLIC_READ_ONLY", "PRIVATE"],
+    "description": (
+        "Who can see and edit it: PUBLIC_READ_WRITE (everyone in the account can edit), "
+        "PUBLIC_READ_ONLY (everyone can view, only the owner can edit), PRIVATE (owner only)"
+    ),
+}
+
+_WIDGET_LINK_PROPERTIES: dict[str, Any] = {
+    "link_url": {"type": "string", "description": "URL the widget title links to (optional)"},
+    "linked_entity_guids": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "Dashboard GUIDs this widget filters when a facet is clicked (facet linking). Pass [] to clear (optional)"
+        ),
+    },
+}
+
 _RAW_CONFIGURATION_PROPERTY: dict[str, Any] = {
     "type": "object",
     "description": (
@@ -90,6 +110,12 @@ Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for p
 **Threshold label visibility (shows/hides threshold labels on chart):**
 `{"thresholds": {"isLabelVisible": true}}`
 
+**Threshold bands on line/area charts** (a shaded band from `from` to `to`; severity critical, warning or success):
+`{"thresholds": {"isLabelVisible": true, "thresholds": [{"name": "Timeout (500 ms)", "from": 490, "to": 520, "severity": "critical"}]}}`
+
+**Threshold colouring on billboards** (the value turns red/yellow once it passes `value`):
+`{"thresholds": [{"alertSeverity": "CRITICAL", "value": 500}, {"alertSeverity": "WARNING", "value": 300}]}`
+
 **Chart line style:**
 `{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
 
@@ -104,7 +130,12 @@ Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for p
   "legend": {"enabled": false}
 }
 ```
-Note: logarithmic scale is not supported by New Relic for line/area charts."""
+Note: logarithmic scale is not supported by New Relic for line/area charts.
+
+**Choosing `widget_type`:** `bar` is a horizontal bar per FACET value and ignores TIMESERIES (a timeseries
+query renders as one bar). For counts over time use `stacked-bar` (columns per time bucket) or `line`/`area`.
+Other types: `billboard`, `table`, `pie`, `histogram`, `heatmap`, `bullet`, `funnel`, `json`, and `markdown`
+(text only: pass `text`, no query)."""
 
 
 _MUTING_RULE_CONDITIONS_SCHEMA: dict[str, Any] = {
@@ -387,6 +418,7 @@ def get_dashboard_tools() -> list[Tool]:
                 "properties": {
                     "name": {"type": "string", "description": "Name of the dashboard"},
                     "description": {"type": "string", "description": "Description of the dashboard (optional)"},
+                    "permissions": {**_PERMISSIONS_PROPERTY, "default": "PUBLIC_READ_WRITE"},
                 },
                 "required": ["name"],
             },
@@ -394,7 +426,10 @@ def get_dashboard_tools() -> list[Tool]:
         Tool(
             name="update_dashboard",
             description=(
-                "Rename a dashboard and/or update its description by GUID. Pages and widgets are preserved unchanged."
+                "Change a dashboard's name, description, permissions and/or template variables by GUID. "
+                "Pages, widgets and anything not passed are preserved, and existing variables are kept unless "
+                "`variables` is given. Widgets reference a variable as `{{name}}` in NRQL, e.g. "
+                "`WHERE appName = {{app}}`."
             ),
             input_schema={
                 "type": "object",
@@ -402,6 +437,39 @@ def get_dashboard_tools() -> list[Tool]:
                     "guid": {"type": "string", "description": "GUID of the dashboard to update"},
                     "name": {"type": "string", "description": "New dashboard name (optional)"},
                     "description": {"type": "string", "description": "New dashboard description (optional)"},
+                    "permissions": _PERMISSIONS_PROPERTY,
+                    "variables": {
+                        "type": "array",
+                        "description": (
+                            "Replaces ALL template variables (pass [] to remove them). Each item is a NerdGraph "
+                            "DashboardVariableInput. Dropdown of fixed values: "
+                            '{"name": "app", "title": "Environment", "type": "ENUM", "replacementStrategy": "STRING", '
+                            '"items": [{"title": "prod", "value": "my-app_prod"}], '
+                            '"defaultValues": [{"value": {"string": "my-app_prod"}}]}. '
+                            'Values from a query: "type": "NRQL", "nrqlQuery": {"accountIds": [123], '
+                            '"query": "SELECT uniques(appName) FROM Transaction"}. Free text: "type": "STRING". '
+                            "replacementStrategy STRING quotes the value, IDENTIFIER backtick-quotes it, NUMBER "
+                            "inserts it bare."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "title": {"type": "string"},
+                                "type": {"type": "string", "enum": ["ENUM", "NRQL", "STRING"]},
+                                "isMultiSelection": {"type": "boolean"},
+                                "replacementStrategy": {
+                                    "type": "string",
+                                    "enum": ["DEFAULT", "IDENTIFIER", "NUMBER", "STRING"],
+                                },
+                                "items": {"type": "array", "items": {"type": "object"}},
+                                "defaultValues": {"type": "array", "items": {"type": "object"}},
+                                "nrqlQuery": {"type": "object"},
+                                "options": {"type": "object"},
+                            },
+                            "required": ["name", "type"],
+                        },
+                    },
                 },
                 "required": ["guid"],
             },
@@ -420,13 +488,28 @@ dashboards. Compact KPI billboard: `{{"column": 1, "row": 1, "width": 2, "height
                 "type": "object",
                 "properties": {
                     "dashboard_guid": {"type": "string", "description": "GUID of the dashboard to add widget to"},
+                    "page_guid": {
+                        "type": "string",
+                        "description": "Page to add the widget to (optional; defaults to the first page)",
+                    },
                     "widget_title": {"type": "string", "description": "Title for the widget"},
-                    "widget_query": {"type": "string", "description": "NRQL query for the widget"},
+                    "widget_query": {
+                        "type": "string",
+                        "description": "NRQL query for the widget (required for every type except markdown)",
+                    },
                     "widget_type": {
                         "type": "string",
-                        "description": "Type of widget (line, area, bar, pie, table, billboard, etc.)",
+                        "description": (
+                            "Visualization: line, area, stacked-bar, bar, billboard, table, pie, histogram, heatmap, "
+                            "bullet, funnel, json, or markdown. See 'Choosing widget_type' above."
+                        ),
                         "default": "line",
                     },
+                    "text": {
+                        "type": "string",
+                        "description": "Markdown body for a markdown widget (headings, lists, links, tables)",
+                    },
+                    **_WIDGET_LINK_PROPERTIES,
                     "raw_configuration": _RAW_CONFIGURATION_PROPERTY,
                     "layout": {
                         **_WIDGET_LAYOUT_SCHEMA,
@@ -436,12 +519,15 @@ dashboards. Compact KPI billboard: `{{"column": 1, "row": 1, "width": 2, "height
                         ),
                     },
                 },
-                "required": ["dashboard_guid", "widget_title", "widget_query"],
+                "required": ["dashboard_guid", "widget_title"],
             },
         ),
         Tool(
             name="get_dashboard_widgets",
-            description="Get all widgets from a dashboard with their details and IDs",
+            description=(
+                "Get all widgets from a dashboard with their IDs, page GUIDs, types, layouts, links, queries and "
+                "rawConfiguration, plus the dashboard's permissions and variables"
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
@@ -459,8 +545,9 @@ it is sent as `rawConfiguration` to NerdGraph and takes precedence over the type
 See the add_widget_to_dashboard description for the full rawConfiguration reference.
 
 Update-specific notes:
-- Omit `widget_type` to keep the widget's current visualization.
-- Omit `layout` to keep the widget's current position and size.""",
+- Every omitted field keeps its current value: title, layout, visualization and rawConfiguration.
+- `widget_query` alone swaps the widget's queries and keeps its other display settings (thresholds, axes).
+- `raw_configuration` replaces the whole rawConfiguration, so include every setting you want to keep.""",
             input_schema={
                 "type": "object",
                 "properties": {
@@ -471,10 +558,12 @@ Update-specific notes:
                     "widget_type": {
                         "type": "string",
                         "description": (
-                            "New widget type (line, area, bar, pie, table, billboard, etc.). "
+                            "New widget type (line, area, stacked-bar, bar, billboard, table, markdown, etc.). "
                             "Omit to keep the widget's current visualization."
                         ),
                     },
+                    "text": {"type": "string", "description": "New markdown body (markdown widgets)"},
+                    **_WIDGET_LINK_PROPERTIES,
                     "raw_configuration": _RAW_CONFIGURATION_PROPERTY,
                     "layout": {
                         **_WIDGET_LAYOUT_SCHEMA,
@@ -508,6 +597,89 @@ Update-specific notes:
                     "dashboard_guid": {"type": "string", "description": "GUID of the dashboard to delete"},
                 },
                 "required": ["dashboard_guid"],
+            },
+        ),
+        Tool(
+            name="undelete_dashboard",
+            description="Restore a dashboard deleted with delete_dashboard, by its GUID",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "dashboard_guid": {"type": "string", "description": "GUID of the deleted dashboard"},
+                },
+                "required": ["dashboard_guid"],
+            },
+        ),
+        Tool(
+            name="add_dashboard_page",
+            description=(
+                "Append an empty page (tab) to a dashboard and return its page GUID; pass that GUID as "
+                "`page_guid` to add_widget_to_dashboard to put widgets on it."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "dashboard_guid": {"type": "string", "description": "GUID of the dashboard"},
+                    "name": {"type": "string", "description": "Name of the new page"},
+                    "description": {"type": "string", "description": "Page description (optional)"},
+                },
+                "required": ["dashboard_guid", "name"],
+            },
+        ),
+        Tool(
+            name="export_dashboard",
+            description=(
+                "Export a dashboard's full definition (name, description, permissions, variables, every page and "
+                "widget with layout and rawConfiguration) as NerdGraph DashboardInput JSON. Use it as a backup "
+                "before risky edits, or edit it and pass it to replace_dashboard."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "dashboard_guid": {"type": "string", "description": "GUID of the dashboard to export"},
+                },
+                "required": ["dashboard_guid"],
+            },
+        ),
+        Tool(
+            name="replace_dashboard",
+            description=(
+                "Replace a dashboard's whole definition with DashboardInput JSON, typically an edited "
+                "export_dashboard result. Anything not in the JSON is removed: pages, widgets and variables. "
+                "Keep page `guid` and widget `id` values to update in place instead of recreating."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "dashboard_guid": {"type": "string", "description": "GUID of the dashboard to replace"},
+                    "dashboard": {
+                        "type": "object",
+                        "description": "DashboardInput: name, permissions, pages[] (with widgets[]), optional "
+                        "description and variables[]",
+                    },
+                },
+                "required": ["dashboard_guid", "dashboard"],
+            },
+        ),
+        Tool(
+            name="create_dashboard_snapshot_url",
+            description=(
+                "Create a PUBLIC static image (PNG or PDF) of one dashboard page and return its URL. Anyone with "
+                "the link can view it without logging in, so only snapshot data that is fine to share. Takes the "
+                "page GUID from get_dashboard_widgets, not the dashboard GUID."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "page_guid": {"type": "string", "description": "GUID of the dashboard page"},
+                    "format": {"type": "string", "enum": ["PNG", "PDF"], "default": "PNG"},
+                    "variables": {
+                        "type": "object",
+                        "description": 'Template variable values to render with, e.g. {"env": ["my-app_prod"]}',
+                        "additionalProperties": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                "required": ["page_guid"],
             },
         ),
     ]

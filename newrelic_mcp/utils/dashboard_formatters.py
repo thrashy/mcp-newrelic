@@ -53,12 +53,6 @@ def build_raw_nrql_queries(account_id: str, widget_query: str) -> list[dict[str,
     return [{"accountIds": [int(account_id)], "query": widget_query}]
 
 
-def build_widget_configuration(widget_type: str, account_id: str, widget_query: str) -> dict[str, Any]:
-    """Build widget configuration for different visualization types"""
-    viz = widget_type if widget_type in {"area", "bar", "billboard", "line", "pie", "table"} else "line"
-    return {viz: {"nrqlQueries": [{"accountId": int(account_id), "query": widget_query}]}}
-
-
 def extract_nrql_queries(config: dict[str, Any]) -> list[str]:
     """Extract NRQL queries from widget configuration"""
     nrql_queries = []

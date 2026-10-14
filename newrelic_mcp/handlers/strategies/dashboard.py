@@ -1,5 +1,6 @@
 """Dashboard tool handlers using Strategy pattern"""
 
+import json
 from typing import Any
 
 from mcp.types import TextContent
@@ -7,7 +8,6 @@ from mcp.types import TextContent
 from ...types import ApiError, ToolError
 from ...utils.dashboard_formatters import (
     build_raw_nrql_queries,
-    build_widget_configuration,
     extract_nrql_queries,
     format_dashboard_list,
 )
@@ -49,9 +49,12 @@ class CreateDashboardHandler(ToolHandlerStrategy):
     async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         dashboard_name = arguments["name"]
         description = arguments.get("description", "")
+        permissions = arguments.get("permissions", "PUBLIC_READ_WRITE")
 
         result = self._unwrap(
-            await self.client.dashboards.create_dashboard(account_id, dashboard_name, description),
+            await self.client.dashboards.create_dashboard(
+                account_id, dashboard_name, description, permissions=permissions
+            ),
             f"creating dashboard '{dashboard_name}'",
         )
 
@@ -68,7 +71,7 @@ class CreateDashboardHandler(ToolHandlerStrategy):
 
 
 class UpdateDashboardHandler(ToolHandlerStrategy):
-    """Handler for renaming a dashboard or updating its description"""
+    """Handler for renaming a dashboard, updating its description, or replacing its template variables"""
 
     requires_account_id = False
 
@@ -76,12 +79,16 @@ class UpdateDashboardHandler(ToolHandlerStrategy):
         dashboard_guid = self._require_guid(arguments)
         name = arguments.get("name")
         description = arguments.get("description")
+        variables = arguments.get("variables")
+        permissions = arguments.get("permissions")
 
-        if name is None and description is None:
-            raise ToolError("Provide at least one of 'name' or 'description' to update.")
+        if name is None and description is None and variables is None and permissions is None:
+            raise ToolError("Provide at least one of 'name', 'description', 'variables' or 'permissions' to update.")
 
         result = self._unwrap(
-            await self.client.dashboards.update_dashboard(dashboard_guid, name=name, description=description),
+            await self.client.dashboards.update_dashboard(
+                dashboard_guid, name=name, description=description, variables=variables, permissions=permissions
+            ),
             f"updating dashboard '{dashboard_guid}'",
         )
 
@@ -94,38 +101,40 @@ class AddWidgetHandler(ToolHandlerStrategy):
 
     async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         dashboard_guid = self._require_guid(arguments, "dashboard_guid")
+        page_guid = self._require_guid(arguments, "page_guid") if arguments.get("page_guid") else None
         widget_title = arguments["widget_title"]
-        widget_query = arguments["widget_query"]
-        widget_type = arguments.get("widget_type", "line")
-        raw_configuration = arguments.get("raw_configuration")
-        layout = arguments.get("layout")
+        widget_query = arguments.get("widget_query")
+        widget_type = arguments.get("widget_type") or "line"
+        text = arguments.get("text")
+        raw_configuration = dict(arguments.get("raw_configuration") or {})
 
-        # Create widget configuration
-        widget_config = {
+        if widget_type == "markdown":
+            if not text and "text" not in raw_configuration:
+                raise ToolError("A markdown widget needs 'text'.")
+            if text:
+                raw_configuration["text"] = text
+        elif not widget_query and "nrqlQueries" not in raw_configuration:
+            raise ToolError("Provide 'widget_query' (or nrqlQueries in raw_configuration) for a chart widget.")
+        elif widget_query and "nrqlQueries" not in raw_configuration:
+            raw_configuration["nrqlQueries"] = build_raw_nrql_queries(account_id, widget_query)
+
+        widget_config: dict[str, Any] = {
             "title": widget_title,
-            "configuration": build_widget_configuration(widget_type, account_id, widget_query),
             "visualization": {"id": f"viz.{widget_type}"},
+            "rawConfiguration": raw_configuration,
         }
+        if arguments.get("layout") is not None:
+            widget_config["layout"] = arguments["layout"]
+        widget_config.update(_link_fields(arguments))
 
-        if layout is not None:
-            widget_config["layout"] = layout
-
-        if raw_configuration is not None:
-            if "nrqlQueries" not in raw_configuration:
-                raw_configuration = {
-                    **raw_configuration,
-                    "nrqlQueries": build_raw_nrql_queries(account_id, widget_query),
-                }
-            widget_config["rawConfiguration"] = raw_configuration
-
-        self._unwrap(
-            await self.client.dashboards.add_widget_to_dashboard(dashboard_guid, widget_config),
+        result = self._unwrap(
+            await self.client.dashboards.add_widget_to_dashboard(dashboard_guid, widget_config, page_guid=page_guid),
             "adding widget to dashboard",
         )
 
-        suffix = " (with custom rawConfiguration)" if raw_configuration else ""
+        page_name = result.get("page_name", "")
         return self._create_success_response(
-            f"Widget '{widget_title}' ({widget_type}) added to dashboard successfully{suffix}!"
+            f"Widget '{widget_title}' ({widget_type}) added to page '{page_name}' successfully!"
         )
 
 
@@ -155,9 +164,14 @@ class GetWidgetsHandler(ToolHandlerStrategy):
                 f"Dashboard has {total_pages} page(s), but no widgets were found on any page."
             )
 
-        widgets_text = (
-            f"Found {total_widgets} widgets across {total_pages} page(s) for dashboard '{dashboard_name}':\n\n"
-        )
+        widgets_text = f"Found {total_widgets} widgets across {total_pages} page(s) for dashboard '{dashboard_name}':\n"
+        if result.get("permissions"):
+            widgets_text += f"Permissions: {result['permissions']}\n"
+        for variable in result.get("variables") or []:
+            widgets_text += (
+                f"Variable: {{{{{variable.get('name')}}}}} ({variable.get('type')}, '{variable.get('title')}')\n"
+            )
+        widgets_text += "\n"
 
         for page in pages:
             page_name = page.get("page_name", "Unnamed Page")
@@ -173,11 +187,25 @@ class GetWidgetsHandler(ToolHandlerStrategy):
                     viz_type = widget.get("visualization_type") or "Unknown"
 
                     # Extract NRQL queries if available
-                    nrql_queries = extract_nrql_queries(widget.get("configuration", {}))
+                    nrql_queries = extract_nrql_queries(widget.get("configuration") or {}) or [
+                        q["query"]
+                        for q in (widget.get("rawConfiguration") or {}).get("nrqlQueries") or []
+                        if q.get("query")
+                    ]
 
                     widgets_text += f"  - **{title}**\n"
                     widgets_text += f"    Widget ID: {widget_id}\n"
                     widgets_text += f"    Type: {viz_type}\n"
+                    layout = widget.get("layout")
+                    if layout:
+                        widgets_text += (
+                            f"    Layout: column {layout.get('column')}, row {layout.get('row')}, "
+                            f"width {layout.get('width')}, height {layout.get('height')}\n"
+                        )
+                    if widget.get("link_url"):
+                        widgets_text += f"    Link: {widget['link_url']}\n"
+                    if widget.get("linked_entity_guids"):
+                        widgets_text += f"    Linked entities: {', '.join(widget['linked_entity_guids'])}\n"
 
                     if nrql_queries:
                         widgets_text += "    NRQL Queries:\n"
@@ -207,33 +235,33 @@ class UpdateWidgetHandler(ToolHandlerStrategy):
         raw_configuration = arguments.get("raw_configuration")
         layout = arguments.get("layout")
 
-        # Build widget update configuration
-        widget_config: dict[str, Any] = {}
+        # dashboardUpdateWidgetsInPage replaces the whole widget, so start from its current state.
+        current = self._unwrap(
+            await self.client.dashboards.get_widget(page_guid, widget_id),
+            "looking up the widget's current state",
+        )
 
-        if widget_title:
-            widget_config["title"] = widget_title
+        if raw_configuration is None:
+            raw_configuration = current.get("rawConfiguration") or {}
+        if widget_query and "nrqlQueries" not in (arguments.get("raw_configuration") or {}):
+            raw_configuration = {**raw_configuration, "nrqlQueries": build_raw_nrql_queries(account_id, widget_query)}
+        if arguments.get("text") is not None:
+            raw_configuration = {**raw_configuration, "text": arguments["text"]}
 
-        if layout is not None:
-            widget_config["layout"] = layout
-
-        if widget_query:
-            widget_config["configuration"] = build_widget_configuration(widget_type or "line", account_id, widget_query)
-            widget_config["visualization"] = {"id": f"viz.{widget_type or 'line'}"}
-            # NerdGraph update requires rawConfiguration alongside typed configuration
-            if raw_configuration is None:
-                raw_configuration = {}
-            if "nrqlQueries" not in raw_configuration:
-                raw_configuration = {
-                    **raw_configuration,
-                    "nrqlQueries": build_raw_nrql_queries(account_id, widget_query),
-                }
-
-        if raw_configuration is not None:
-            widget_config["rawConfiguration"] = raw_configuration
-            # Only force a visualization when explicitly requested — otherwise a
-            # raw-configuration-only tweak would convert the widget to viz.line.
-            if "visualization" not in widget_config and widget_type:
-                widget_config["visualization"] = {"id": f"viz.{widget_type}"}
+        visualization = {"id": f"viz.{widget_type}"} if widget_type else current.get("visualization")
+        widget_config: dict[str, Any] = {
+            "title": widget_title or current.get("title", ""),
+            "visualization": visualization,
+            "rawConfiguration": raw_configuration,
+        }
+        if layout is not None or current.get("layout"):
+            widget_config["layout"] = layout if layout is not None else current["layout"]
+        if (current.get("link") or {}).get("url"):
+            widget_config["link"] = {"url": current["link"]["url"]}
+        current_linked = [e["guid"] for e in current.get("linkedEntities") or [] if e and e.get("guid")]
+        if current_linked:
+            widget_config["linkedEntityGuids"] = current_linked
+        widget_config.update(_link_fields(arguments))
 
         self._unwrap(
             await self.client.dashboards.update_widget(page_guid, widget_id, widget_config),
@@ -275,3 +303,105 @@ class DeleteDashboardHandler(ToolHandlerStrategy):
         )
 
         return self._create_success_response(f"Dashboard '{dashboard_guid}' deleted successfully.")
+
+
+class ExportDashboardHandler(ToolHandlerStrategy):
+    """Handler for exporting a dashboard's full definition as JSON"""
+
+    requires_account_id = False
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        dashboard_guid = self._require_guid(arguments, "dashboard_guid")
+        dashboard_input = self._unwrap(
+            await self.client.dashboards.export_dashboard(dashboard_guid),
+            f"exporting dashboard '{dashboard_guid}'",
+        )
+        return self._create_success_response(json.dumps(dashboard_input, indent=2))
+
+
+class ReplaceDashboardHandler(ToolHandlerStrategy):
+    """Handler for replacing a dashboard's whole definition"""
+
+    requires_account_id = False
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        dashboard_guid = self._require_guid(arguments, "dashboard_guid")
+        dashboard = arguments["dashboard"]
+        if isinstance(dashboard, str):
+            try:
+                dashboard = json.loads(dashboard)
+            except json.JSONDecodeError as e:
+                raise ToolError(f"'dashboard' is not valid JSON: {e}") from e
+        if not isinstance(dashboard, dict) or not dashboard.get("name") or not dashboard.get("pages"):
+            raise ToolError("'dashboard' must be a DashboardInput object with at least 'name' and 'pages'.")
+        dashboard.setdefault("permissions", "PUBLIC_READ_WRITE")
+
+        result = self._unwrap(
+            await self.client.dashboards.replace_dashboard(dashboard_guid, dashboard),
+            f"replacing dashboard '{dashboard_guid}'",
+        )
+        pages = result.get("pages") or []
+        return self._create_success_response(
+            f"Dashboard '{result.get('name') or dashboard_guid}' replaced ({len(pages)} page(s))."
+        )
+
+
+class AddDashboardPageHandler(ToolHandlerStrategy):
+    """Handler for appending a page to a dashboard"""
+
+    requires_account_id = False
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        dashboard_guid = self._require_guid(arguments, "dashboard_guid")
+        name = arguments["name"]
+        result = self._unwrap(
+            await self.client.dashboards.add_dashboard_page(dashboard_guid, name, arguments.get("description")),
+            f"adding page to dashboard '{dashboard_guid}'",
+        )
+        return self._create_success_response(
+            f"Page '{name}' added. Page GUID: {result.get('page_guid')}\n"
+            "Pass it as page_guid to add_widget_to_dashboard to put widgets on this page."
+        )
+
+
+class UndeleteDashboardHandler(ToolHandlerStrategy):
+    """Handler for restoring a deleted dashboard"""
+
+    requires_account_id = False
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        dashboard_guid = self._require_guid(arguments, "dashboard_guid")
+        self._unwrap(
+            await self.client.dashboards.undelete_dashboard(dashboard_guid),
+            f"undeleting dashboard '{dashboard_guid}'",
+        )
+        return self._create_success_response(f"Dashboard '{dashboard_guid}' restored.")
+
+
+class CreateDashboardSnapshotHandler(ToolHandlerStrategy):
+    """Handler for creating a public static snapshot of a dashboard page"""
+
+    requires_account_id = False
+
+    async def handle(self, arguments: dict[str, Any], _account_id: str) -> list[TextContent]:
+        page_guid = self._require_guid(arguments, "page_guid")
+        image_format = arguments.get("format", "PNG")
+        result = self._unwrap(
+            await self.client.dashboards.create_dashboard_snapshot_url(
+                page_guid, image_format=image_format, variables=arguments.get("variables")
+            ),
+            f"creating snapshot of page '{page_guid}'",
+        )
+        return self._create_success_response(
+            f"Snapshot ({image_format}): {result['url']}\nAnyone with this link can view it without a New Relic login."
+        )
+
+
+def _link_fields(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Widget link fields from tool arguments; only keys the caller passed."""
+    fields: dict[str, Any] = {}
+    if arguments.get("link_url"):
+        fields["link"] = {"url": arguments["link_url"]}
+    if arguments.get("linked_entity_guids") is not None:
+        fields["linkedEntityGuids"] = list(arguments["linked_entity_guids"])
+    return fields

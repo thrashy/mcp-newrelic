@@ -4,6 +4,7 @@ New Relic Dashboards API client.
 Handles dashboard creation, widget management, and dashboard queries.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -14,12 +15,72 @@ from .base_client import BaseNewRelicClient
 
 logger = logging.getLogger(__name__)
 
+_WIDGET_FIELDS = """
+                    id
+                    title
+                    layout { column row width height }
+                    visualization { id }
+                    rawConfiguration
+                    link { url }
+                    linkedEntities { guid }
+"""
+
+_DASHBOARD_FETCH_QUERY = (
+    """
+query($guid: EntityGuid!) {
+  actor {
+    entity(guid: $guid) {
+      ... on DashboardEntity {
+        name
+        description
+        permissions
+        variables {
+          name
+          title
+          type
+          isMultiSelection
+          replacementStrategy
+          defaultValues { value { string } }
+          items { title value }
+          nrqlQuery { accountIds query }
+          options { excluded hiddenOnVariablesBar ignoreTimeRange showApplyAction }
+        }
+        pages {
+          guid
+          name
+          description
+          widgets {"""
+    + _WIDGET_FIELDS
+    + """          }
+        }
+      }
+    }
+  }
+}
+"""
+)
+
 
 class DashboardsClient:
     """Client for New Relic dashboards APIs"""
 
+    # A page added by dashboardUpdate is not resolvable by its own GUID for ~5-10 s, and a
+    # permissions change takes as long to show in reads (both measured).
+    page_index_retry_seconds: float = 5.0
+    page_index_retries: int = 3
+
     def __init__(self, base: BaseNewRelicClient):
         self._base = base
+
+    async def _fetch_page_entity(self, fetch_query: str, page_guid: str) -> dict[str, Any]:
+        """Run a query keyed by a page GUID, waiting out the indexing lag of newly added pages."""
+        for attempt in range(self.page_index_retries + 1):
+            result = await self._base.execute_graphql(fetch_query, {"guid": page_guid})
+            entity: dict[str, Any] = (result.get("data") or {}).get("actor", {}).get("entity") or {}
+            if entity or attempt == self.page_index_retries:
+                return entity
+            await asyncio.sleep(self.page_index_retry_seconds)
+        return {}
 
     async def get_dashboards(
         self, account_id: str, search: str | None = None, guid: str | None = None, limit: int = 200
@@ -51,7 +112,12 @@ class DashboardsClient:
             return handle_api_error("get dashboards", e)
 
     async def create_dashboard(
-        self, account_id: str, name: str, description: str = "", widgets: list[dict[str, Any]] | None = None
+        self,
+        account_id: str,
+        name: str,
+        description: str = "",
+        widgets: list[dict[str, Any]] | None = None,
+        permissions: str = "PUBLIC_READ_WRITE",
     ) -> dict[str, Any] | ApiError:
         """Create a new dashboard"""
         widgets = widgets or []
@@ -59,7 +125,7 @@ class DashboardsClient:
         dashboard_input = {
             "name": name,
             "description": description,
-            "permissions": "PUBLIC_READ_WRITE",
+            "permissions": permissions,
             "pages": [{"name": name, "description": description, "widgets": widgets}],
         }
 
@@ -90,80 +156,34 @@ class DashboardsClient:
         entity_result: dict[str, Any] = extracted.get("entityResult", {})
         return entity_result
 
-    async def update_dashboard(
-        self, dashboard_guid: str, name: str | None = None, description: str | None = None
-    ) -> dict[str, Any] | ApiError:
-        """Rename a dashboard and/or update its description.
-
-        dashboardUpdate replaces the entire dashboard, so the current pages and
-        widgets are fetched first and resubmitted with only name/description changed.
-        """
-        fetch_query = """
-        query($guid: EntityGuid!) {
-          actor {
-            entity(guid: $guid) {
-              ... on DashboardEntity {
-                name
-                description
-                permissions
-                pages {
-                  guid
-                  name
-                  description
-                  widgets {
-                    id
-                    title
-                    layout { column row width height }
-                    visualization { id }
-                    rawConfiguration
-                  }
-                }
-              }
-            }
-          }
-        }
-        """
-
+    async def export_dashboard(self, dashboard_guid: str) -> dict[str, Any] | ApiError:
+        """Return the dashboard as a NerdGraph DashboardInput: name, description, permissions,
+        variables and every page with its widgets. dashboardUpdate takes this shape back as-is."""
         try:
-            result = await self._base.execute_graphql(fetch_query, {"guid": dashboard_guid})
+            result = await self._base.execute_graphql(_DASHBOARD_FETCH_QUERY, {"guid": dashboard_guid})
         except API_ERRORS as e:
-            return handle_api_error("update dashboard", e)
+            return handle_api_error("export dashboard", e)
 
         entity = result.get("data", {}).get("actor", {}).get("entity") or {}
         if not entity or not entity.get("pages"):
             return ApiError(f"Dashboard '{dashboard_guid}' not found")
 
-        pages_input = []
-        for page in entity["pages"]:
-            widgets_input = []
-            for w in page.get("widgets", []) or []:
-                widget_input: dict[str, Any] = {
-                    "id": w["id"],
-                    "title": w.get("title", ""),
-                    "visualization": w.get("visualization", {"id": "viz.line"}),
-                    "rawConfiguration": w.get("rawConfiguration", {}),
-                }
-                if w.get("layout"):
-                    widget_input["layout"] = w["layout"]
-                widgets_input.append(widget_input)
-            page_input: dict[str, Any] = {
-                "guid": page.get("guid"),
-                "name": page.get("name", "Page 1"),
-                "widgets": widgets_input,
-            }
-            if page.get("description"):
-                page_input["description"] = page["description"]
-            pages_input.append(page_input)
-
         dashboard_input: dict[str, Any] = {
-            "name": name if name is not None else entity.get("name", ""),
+            "name": entity.get("name", ""),
             "permissions": entity.get("permissions", "PUBLIC_READ_WRITE"),
-            "pages": pages_input,
+            "pages": [_page_input(page) for page in entity["pages"]],
         }
-        new_description = description if description is not None else entity.get("description")
-        if new_description:
-            dashboard_input["description"] = new_description
+        if entity.get("description"):
+            dashboard_input["description"] = entity["description"]
+        variables = _drop_nulls(entity.get("variables") or [])
+        if variables:
+            dashboard_input["variables"] = variables
+        return dashboard_input
 
+    async def replace_dashboard(
+        self, dashboard_guid: str, dashboard_input: dict[str, Any]
+    ) -> dict[str, Any] | ApiError:
+        """Replace the whole dashboard with a DashboardInput, typically an edited export_dashboard result."""
         mutation = """
         mutation($guid: EntityGuid!, $dashboard: DashboardInput!) {
           dashboardUpdate(guid: $guid, dashboard: $dashboard) {
@@ -171,6 +191,7 @@ class DashboardsClient:
               guid
               name
               description
+              pages { guid name }
             }
             errors {
               description
@@ -195,12 +216,127 @@ class DashboardsClient:
             "guid": entity_result.get("guid", dashboard_guid),
             "name": entity_result.get("name"),
             "description": entity_result.get("description"),
+            "pages": entity_result.get("pages") or [],
         }
 
-    async def add_widget_to_dashboard(
-        self, dashboard_guid: str, widget_config: dict[str, Any]
+    async def update_dashboard(
+        self,
+        dashboard_guid: str,
+        name: str | None = None,
+        description: str | None = None,
+        variables: list[dict[str, Any]] | None = None,
+        permissions: str | None = None,
     ) -> dict[str, Any] | ApiError:
-        """Add a widget to an existing dashboard - requires page GUID, not dashboard GUID"""
+        """Change a dashboard's name, description, template variables and/or permissions.
+
+        dashboardUpdate replaces the entire dashboard, so the current definition is exported
+        first and resubmitted with only the requested fields changed.
+        """
+        dashboard_input = await self.export_dashboard(dashboard_guid)
+        if isinstance(dashboard_input, ApiError):
+            return dashboard_input
+
+        if name is not None:
+            dashboard_input["name"] = name
+        if description is not None:
+            dashboard_input["description"] = description
+        if permissions is not None:
+            dashboard_input["permissions"] = permissions
+        if variables is not None:
+            dashboard_input.pop("variables", None)
+            if variables:
+                dashboard_input["variables"] = variables
+
+        result = await self.replace_dashboard(dashboard_guid, dashboard_input)
+        if permissions is not None and not isinstance(result, ApiError):
+            await self._wait_for_permissions(dashboard_guid, permissions)
+        return result
+
+    async def _wait_for_permissions(self, dashboard_guid: str, permissions: str) -> None:
+        """Reads return the old permissions for ~5-10 s after a change (measured), and every later
+        read-modify-write would resubmit that stale value, so wait until reads catch up."""
+        query = """
+        query($guid: EntityGuid!) {
+          actor { entity(guid: $guid) { ... on DashboardEntity { permissions } } }
+        }
+        """
+        for _ in range(self.page_index_retries * 2):
+            result = await self._base.execute_graphql(query, {"guid": dashboard_guid})
+            entity = (result.get("data") or {}).get("actor", {}).get("entity") or {}
+            if entity.get("permissions") == permissions:
+                return
+            await asyncio.sleep(self.page_index_retry_seconds / 2)
+        logger.warning("Dashboard %s still reads stale permissions after the update", dashboard_guid)
+
+    async def add_dashboard_page(
+        self, dashboard_guid: str, name: str, description: str | None = None
+    ) -> dict[str, Any] | ApiError:
+        """Append an empty page and return its GUID."""
+        dashboard_input = await self.export_dashboard(dashboard_guid)
+        if isinstance(dashboard_input, ApiError):
+            return dashboard_input
+
+        existing = {page.get("guid") for page in dashboard_input["pages"]}
+        new_page: dict[str, Any] = {"name": name, "widgets": []}
+        if description:
+            new_page["description"] = description
+        dashboard_input["pages"].append(new_page)
+
+        result = await self.replace_dashboard(dashboard_guid, dashboard_input)
+        if isinstance(result, ApiError):
+            return result
+
+        added = [page for page in result["pages"] if page.get("guid") not in existing]
+        return {"success": True, "page_guid": added[-1]["guid"] if added else None, "page_name": name}
+
+    async def undelete_dashboard(self, dashboard_guid: str) -> dict[str, Any] | ApiError:
+        """Restore a previously deleted dashboard."""
+        mutation = """
+        mutation($guid: EntityGuid!) {
+          dashboardUndelete(guid: $guid) {
+            errors {
+              description
+              type
+            }
+          }
+        }
+        """
+        extracted = await self._base.execute_mutation(
+            mutation, {"guid": dashboard_guid}, "dashboardUndelete", "undelete dashboard"
+        )
+        if isinstance(extracted, ApiError):
+            return extracted
+        return {"success": True, "guid": dashboard_guid}
+
+    async def create_dashboard_snapshot_url(
+        self, page_guid: str, image_format: str = "PNG", variables: dict[str, list[str]] | None = None
+    ) -> dict[str, Any] | ApiError:
+        """Create a public static snapshot URL for one dashboard page."""
+        params: dict[str, Any] = {"format": image_format}
+        if variables:
+            params["variables"] = [{"name": k, "values": v} for k, v in variables.items()]
+
+        mutation = """
+        mutation($guid: EntityGuid!, $params: DashboardSnapshotUrlInput) {
+          dashboardCreateSnapshotUrl(guid: $guid, params: $params)
+        }
+        """
+        try:
+            result = await self._base.execute_graphql(mutation, {"guid": page_guid, "params": params})
+        except API_ERRORS as e:
+            return handle_api_error("create dashboard snapshot", e)
+
+        if result.get("errors"):
+            return ApiError("; ".join(e.get("message", str(e)) for e in result["errors"]))
+        url = (result.get("data") or {}).get("dashboardCreateSnapshotUrl")
+        if not url:
+            return ApiError("New Relic returned no snapshot URL")
+        return {"success": True, "url": url, "format": image_format}
+
+    async def add_widget_to_dashboard(
+        self, dashboard_guid: str, widget_config: dict[str, Any], page_guid: str | None = None
+    ) -> dict[str, Any] | ApiError:
+        """Add a widget to a page of the dashboard: `page_guid` if given, otherwise the first page."""
 
         get_pages_query = """
         query($guid: EntityGuid!) {
@@ -228,8 +364,14 @@ class DashboardsClient:
         if not pages:
             return ApiError("No pages found in dashboard")
 
-        page_guid = pages[0]["guid"]
-        page_name = pages[0].get("name", "Page 1")
+        if page_guid is None:
+            target = pages[0]
+        else:
+            target = next((page for page in pages if page.get("guid") == page_guid), None)
+            if target is None:
+                return ApiError(f"Page '{page_guid}' is not on dashboard '{dashboard_guid}'")
+        page_guid = target["guid"]
+        page_name = target.get("name", "Page 1")
 
         mutation = """
         mutation($guid: EntityGuid!, $widgets: [DashboardWidgetInput!]!) {
@@ -266,6 +408,8 @@ class DashboardsClient:
             entity(guid: $guid) {
               ... on DashboardEntity {
                 name
+                permissions
+                variables { name title type }
                 pages {
                   guid
                   name
@@ -277,6 +421,9 @@ class DashboardsClient:
                       id
                     }
                     rawConfiguration
+                    layout { column row width height }
+                    link { url }
+                    linkedEntities { guid }
                     configuration {
                       area {
                         nrqlQueries {
@@ -335,6 +482,8 @@ class DashboardsClient:
 
             widgets_info: dict[str, Any] = {
                 "dashboard_name": dashboard_name,
+                "permissions": entity.get("permissions"),
+                "variables": entity.get("variables") or [],
                 "dashboard_guid": dashboard_guid,
                 "pages": [],
                 "total_pages": len(pages) if pages else 0,
@@ -360,6 +509,9 @@ class DashboardsClient:
                         "visualization_type": viz_obj.get("id") or "unknown",
                         "configuration": config_obj,
                         "rawConfiguration": widget.get("rawConfiguration"),
+                        "layout": widget.get("layout"),
+                        "link_url": (widget.get("link") or {}).get("url"),
+                        "linked_entity_guids": [e["guid"] for e in widget.get("linkedEntities") or [] if e],
                     }
                     page_info["widgets"].append(widget_info)
 
@@ -398,10 +550,45 @@ class DashboardsClient:
 
         return {"success": True, "message": f"Widget '{widget_id}' updated successfully", "widget_id": widget_id}
 
+    async def get_widget(self, page_guid: str, widget_id: str) -> dict[str, Any] | ApiError:
+        """Return a widget's current title, layout, visualization, rawConfiguration and links."""
+        fetch_query = (
+            """
+        query($guid: EntityGuid!) {
+          actor {
+            entity(guid: $guid) {
+              ... on DashboardEntity {
+                pages {
+                  guid
+                  widgets {"""
+            + _WIDGET_FIELDS
+            + """                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        )
+
+        try:
+            entity = await self._fetch_page_entity(fetch_query, page_guid)
+        except API_ERRORS as e:
+            return handle_api_error("get widget", e)
+
+        for page in entity.get("pages") or []:
+            if page.get("guid") != page_guid:
+                continue
+            for w in page.get("widgets") or []:
+                if str(w.get("id")) == str(widget_id):
+                    widget: dict[str, Any] = w
+                    return widget
+        return ApiError(f"Widget '{widget_id}' not found on page '{page_guid}'")
+
     async def delete_widget(self, page_guid: str, widget_id: str) -> dict[str, Any] | ApiError:
         """Delete a widget by updating the page with all widgets except the target."""
-        # Fetch current page widgets
-        fetch_query = """
+        fetch_query = (
+            """
         query($guid: EntityGuid!) {
           actor {
             entity(guid: $guid) {
@@ -410,26 +597,22 @@ class DashboardsClient:
                   guid
                   name
                   description
-                  widgets {
-                    id
-                    title
-                    layout { column row width height }
-                    visualization { id }
-                    rawConfiguration
-                  }
+                  widgets {"""
+            + _WIDGET_FIELDS
+            + """                  }
                 }
               }
             }
           }
         }
         """
+        )
 
         try:
-            result = await self._base.execute_graphql(fetch_query, {"guid": page_guid})
+            entity = await self._fetch_page_entity(fetch_query, page_guid)
         except API_ERRORS as e:
             return handle_api_error("delete widget", e)
 
-        entity = result.get("data", {}).get("actor", {}).get("entity", {})
         if not entity:
             return ApiError(f"Page '{page_guid}' not found")
 
@@ -450,15 +633,7 @@ class DashboardsClient:
             if str(w.get("id")) == str(widget_id):
                 found = True
                 continue
-            widget_input: dict[str, Any] = {
-                "id": w["id"],
-                "title": w.get("title", ""),
-                "visualization": w.get("visualization", {"id": "viz.line"}),
-                "rawConfiguration": w.get("rawConfiguration", {}),
-            }
-            if w.get("layout"):
-                widget_input["layout"] = w["layout"]
-            remaining_widgets.append(widget_input)
+            remaining_widgets.append(_widget_input(w))
 
         if not found:
             return ApiError(f"Widget '{widget_id}' not found on page '{page_guid}'")
@@ -520,3 +695,41 @@ class DashboardsClient:
             "message": f"Dashboard '{dashboard_guid}' deleted successfully",
             "status": delete_result.get("status"),
         }
+
+
+def _drop_nulls(value: Any) -> Any:
+    """Strip null fields so variables read back from NerdGraph are valid DashboardVariableInput."""
+    if isinstance(value, dict):
+        return {k: _drop_nulls(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_drop_nulls(v) for v in value]
+    return value
+
+
+def _widget_input(widget: dict[str, Any]) -> dict[str, Any]:
+    """Convert a DashboardWidget read back from NerdGraph into a DashboardWidgetInput."""
+    widget_input: dict[str, Any] = {
+        "id": widget["id"],
+        "title": widget.get("title") or "",
+        "visualization": widget.get("visualization") or {"id": "viz.line"},
+        "rawConfiguration": widget.get("rawConfiguration") or {},
+    }
+    if widget.get("layout"):
+        widget_input["layout"] = widget["layout"]
+    if (widget.get("link") or {}).get("url"):
+        widget_input["link"] = {"url": widget["link"]["url"]}
+    linked = [e["guid"] for e in widget.get("linkedEntities") or [] if e and e.get("guid")]
+    if linked:
+        widget_input["linkedEntityGuids"] = linked
+    return widget_input
+
+
+def _page_input(page: dict[str, Any]) -> dict[str, Any]:
+    page_input: dict[str, Any] = {
+        "guid": page.get("guid"),
+        "name": page.get("name") or "Page 1",
+        "widgets": [_widget_input(w) for w in page.get("widgets") or [] if w],
+    }
+    if page.get("description"):
+        page_input["description"] = page["description"]
+    return page_input

@@ -210,12 +210,17 @@ Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/
 
 ### Dashboard Management
 - **`get_dashboards`**: List and search dashboards with filtering
-- **`get_dashboard_widgets`**: Retrieve all widgets from a dashboard
-- **`create_dashboard`**: Create new dashboards for monitoring
-- **`update_dashboard`**: Rename a dashboard and/or update its description (pages and widgets preserved)
+- **`get_dashboard_widgets`**: Retrieve all widgets from a dashboard with their page GUIDs, types, layouts, links and queries, plus the dashboard's permissions and variables
+- **`create_dashboard`**: Create new dashboards for monitoring, optionally `PUBLIC_READ_ONLY` or `PRIVATE`
+- **`update_dashboard`**: Rename a dashboard, update its description, and/or replace its template variables (dropdowns referenced as `{{name}}` in widget NRQL); pages, widgets and existing variables are preserved
+- **`export_dashboard`**: Full dashboard definition (permissions, variables, every page and widget with layout and rawConfiguration) as DashboardInput JSON; use as a backup or edit and pass to `replace_dashboard`
+- **`replace_dashboard`**: Replace the whole dashboard with DashboardInput JSON (destructive; anything not in the JSON is removed)
+- **`add_dashboard_page`**: Append an empty page and return its GUID for `add_widget_to_dashboard`'s `page_guid`
+- **`undelete_dashboard`**: Restore a dashboard removed with `delete_dashboard`
+- **`create_dashboard_snapshot_url`**: Public PNG/PDF snapshot link of one page, optionally rendered with template variable values (anyone with the link can view it)
 - **`delete_dashboard`**: Delete a dashboard by GUID
-- **`add_widget_to_dashboard`**: Add custom NRQL-based widgets
-- **`update_widget`**: Update existing dashboard widgets
+- **`add_widget_to_dashboard`**: Add NRQL chart widgets (any visualization, including `stacked-bar`) or markdown text widgets, to any page, with optional title links and facet-linked dashboards
+- **`update_widget`**: Update existing dashboard widgets; every field you omit keeps its current value
 - **`delete_widget`**: Remove widgets from dashboards
 
 ### Entity Management

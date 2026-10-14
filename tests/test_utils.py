@@ -3,7 +3,6 @@
 from newrelic_mcp.types import ApiError
 from newrelic_mcp.utils.dashboard_formatters import (
     build_raw_nrql_queries,
-    build_widget_configuration,
     extract_nrql_queries,
     format_dashboard_list,
 )
@@ -96,22 +95,6 @@ class TestBuildRawNrqlQueries:
     def test_builds_correct_structure(self):
         result = build_raw_nrql_queries("1234567", "SELECT 1")
         assert result == [{"accountIds": [1234567], "query": "SELECT 1"}]
-
-
-class TestBuildWidgetConfiguration:
-    def test_line_type(self):
-        result = build_widget_configuration("line", "123", "SELECT count(*) FROM Transaction")
-        assert "line" in result
-        assert result["line"]["nrqlQueries"][0]["accountId"] == 123
-        assert result["line"]["nrqlQueries"][0]["query"] == "SELECT count(*) FROM Transaction"
-
-    def test_billboard_type(self):
-        result = build_widget_configuration("billboard", "123", "SELECT 1")
-        assert "billboard" in result
-
-    def test_unknown_type_defaults_to_line(self):
-        result = build_widget_configuration("heatmap", "123", "SELECT 1")
-        assert "line" in result
 
 
 class TestExtractNrqlQueries:

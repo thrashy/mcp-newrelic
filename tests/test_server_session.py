@@ -39,7 +39,7 @@ class TestServerSession:
     async def test_list_tools_exposes_every_tool_with_a_schema(self, server):
         async with connected_session(server) as session:
             tools = (await session.list_tools()).tools
-            assert len(tools) == 52
+            assert len(tools) == 57
             assert all(tool.input_schema.get("type") == "object" for tool in tools)
 
     async def test_list_resources_over_the_wire(self, server):
