@@ -54,6 +54,23 @@ class TestAppPerformanceHandler:
         assert "450.00ms" in text
         assert "35.20 req/min" in text
 
+    async def test_otel_source_is_labelled(self, mock_client, config):
+        mock_client.monitoring.get_performance_metrics.return_value = {
+            "avg_duration": 0.01,
+            "throughput": 1.0,
+            "request_count": 60,
+            "source": "opentelemetry",
+        }
+        handler = AppPerformanceHandler(mock_client, config)
+        result = await handler.handle({"app_name": "otel-svc"}, "1234567")
+        assert "Source: OpenTelemetry HTTP server metrics (60 requests)" in result[0].text
+
+    async def test_apm_source_has_no_label(self, mock_client, config):
+        mock_client.monitoring.get_performance_metrics.return_value = {"avg_duration": 0.01, "throughput": 1.0}
+        handler = AppPerformanceHandler(mock_client, config)
+        result = await handler.handle({"app_name": "MyApp"}, "1234567")
+        assert "Source" not in result[0].text
+
     async def test_error_in_metrics_raises_tool_error(self, mock_client, config):
         mock_client.monitoring.get_performance_metrics.return_value = ApiError("query failed")
         handler = AppPerformanceHandler(mock_client, config)

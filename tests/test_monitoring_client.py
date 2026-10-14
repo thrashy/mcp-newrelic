@@ -31,6 +31,18 @@ class TestGetApplications:
         apps = await client.get_applications("1234567")
         assert apps == []
 
+    async def test_merges_otel_services_without_duplicates(self):
+        client = _make_client()
+        client._base.query_nrql = AsyncMock(
+            side_effect=[
+                _nrql_response([{"applications": ["App1", "Both"]}]),
+                _nrql_response([{"applications": ["Both", "otel-svc"]}]),
+            ]
+        )
+        apps = await client.get_applications("1234567")
+        assert [app["name"] for app in apps] == ["App1", "Both", "otel-svc"]
+        assert "service.name" in client._base.query_nrql.await_args.args[1]
+
 
 class TestGetRecentIncidents:
     async def test_returns_incidents(self):
@@ -79,9 +91,36 @@ class TestGetErrorMetrics:
 
     async def test_fallback_query(self):
         client = _make_client()
-        client._base.query_nrql = AsyncMock(side_effect=[_nrql_response([]), _nrql_response([{"error_count": 2}])])
+        client._base.query_nrql = AsyncMock(
+            side_effect=[_nrql_response([]), _nrql_response([]), _nrql_response([{"error_count": 2}])]
+        )
         result = await client.get_error_metrics("1234567", "MyApp", 1)
         assert result["error_count"] == 2
+
+    async def test_otel_service_skips_apm(self):
+        client = _make_client()
+        client._base.query_nrql.return_value = _nrql_response(
+            [{"error_count": 34, "avg_duration": 0.003, "request_count": 17156}]
+        )
+        result = await client.get_error_metrics("1234567", "otel-svc", 1)
+        assert result["error_count"] == 34
+        assert result["source"] == "opentelemetry"
+        client._base.query_nrql.assert_awaited_once()
+        nrql = client._base.query_nrql.await_args.args[1]
+        assert "service.name = 'otel-svc'" in nrql
+        assert "http.response.status_code >= 500" in nrql
+
+    async def test_otel_without_requests_falls_back_to_apm(self):
+        client = _make_client()
+        client._base.query_nrql = AsyncMock(
+            side_effect=[
+                _nrql_response([{"error_count": 0, "avg_duration": None, "request_count": 0}]),
+                _nrql_response([{"error_count": 5, "avg_duration": 0.3}]),
+            ]
+        )
+        result = await client.get_error_metrics("1234567", "MyApp", 1)
+        assert result == {"error_count": 5, "avg_duration": 0.3}
+        assert "FROM TransactionError" in client._base.query_nrql.await_args.args[1]
 
     async def test_exception_returns_error(self):
         client = _make_client()
@@ -104,6 +143,28 @@ class TestGetPerformanceMetrics:
         client._base.query_nrql.return_value = _nrql_response([])
         result = await client.get_performance_metrics("1234567", "MyApp", 1)
         assert result["avg_duration"] == "No data"
+
+    async def test_otel_service_skips_apm(self):
+        client = _make_client()
+        client._base.query_nrql.return_value = _nrql_response(
+            [{"avg_duration": 0.01, "p95_duration": {"95": 0.024}, "throughput": 300000.0, "request_count": 9}]
+        )
+        result = await client.get_performance_metrics("1234567", "otel-svc", 1)
+        assert result["source"] == "opentelemetry"
+        client._base.query_nrql.assert_awaited_once()
+        assert "FROM Metric WHERE service.name = 'otel-svc'" in client._base.query_nrql.await_args.args[1]
+
+    async def test_otel_without_requests_falls_back_to_apm(self):
+        client = _make_client()
+        client._base.query_nrql = AsyncMock(
+            side_effect=[
+                _nrql_response([{"avg_duration": None, "p95_duration": {"95": 0.0}, "request_count": 0}]),
+                _nrql_response([{"avg_duration": 0.5, "p95_duration": 1.2, "throughput": 100}]),
+            ]
+        )
+        result = await client.get_performance_metrics("1234567", "MyApp", 1)
+        assert result["avg_duration"] == 0.5
+        assert "FROM Transaction" in client._base.query_nrql.await_args.args[1]
 
     async def test_exception_returns_error(self):
         client = _make_client()

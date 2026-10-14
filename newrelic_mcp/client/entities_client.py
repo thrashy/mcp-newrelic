@@ -62,7 +62,7 @@ class EntitiesClient:
             for tag in tags:
                 parts.append(f"tags.`{escape_nrql_string(tag['key'])}` = '{escape_nrql_string(tag['value'])}'")
         if len(parts) == 1:
-            parts.append("domain IN ('APM', 'INFRA', 'SYNTH', 'BROWSER')")
+            parts.append("domain IN ('APM', 'EXT', 'INFRA', 'SYNTH', 'BROWSER')")
 
         query_string = " AND ".join(parts)
 

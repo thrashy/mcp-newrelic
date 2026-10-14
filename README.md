@@ -201,8 +201,8 @@ Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/
 
 ### NRQL & Monitoring
 - **`query_nrql`**: Execute custom NRQL queries with full flexibility
-- **`get_app_performance`**: Application performance metrics (avg/p95 response time, throughput)
-- **`get_app_errors`**: Error metrics, counts, and error analysis
+- **`get_app_performance`**: Application performance metrics (avg/p95 response time, throughput). Takes an APM `appName` or an OpenTelemetry `service.name`; OTel services are read from the unsampled `http.server.request.duration` metric
+- **`get_app_errors`**: Error metrics, counts, and error analysis. OTel services count 5xx or `error.type` requests
 - **`get_incidents`**: Recent incidents with time filtering
 - **`get_infrastructure_hosts`**: Infrastructure host metrics (CPU, memory, disk)
 - **`get_alert_violations`**: Recent alert violations and status
@@ -224,7 +224,7 @@ Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/
 - **`delete_widget`**: Remove widgets from dashboards
 
 ### Entity Management
-- **`entity_search`**: Search for any entity by name, type (APPLICATION, HOST, MONITOR, KEY_TRANSACTION), or domain (APM, INFRA, SYNTH, BROWSER, EXT). Supports `limit` (default 25, max 200) and `minimal_output` to reduce response size.
+- **`entity_search`**: Search for any entity by name, type (APPLICATION, HOST, MONITOR, KEY_TRANSACTION), or domain (APM, INFRA, SYNTH, BROWSER, EXT). With no filters it searches APM, EXT (OpenTelemetry services), INFRA, SYNTH and BROWSER. Supports `limit` (default 25, max 200) and `minimal_output` to reduce response size.
 - **`get_entity`**: Look up a single entity by GUID with full details (name, type, account, tags, permalink, type-specific metadata)
 - **`decode_entity_guid`**: Decode a base64-encoded entity GUID to reveal account ID, domain, entity type, and domain ID without an API call
 - **`get_entity_tags`**: Get all tags for an entity by GUID
@@ -268,7 +268,7 @@ Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/
 
 Access structured data through these MCP resources:
 
-- **`newrelic://applications`**: Complete list of monitored applications
+- **`newrelic://applications`**: Complete list of monitored APM applications and OpenTelemetry services
 - **`newrelic://incidents/recent`**: Recent incidents and alert summary
 - **`newrelic://dashboards`**: Dashboard metadata (name, GUID, created date, URL)
 - **`newrelic://alerts/policies`**: Alert policies and configurations

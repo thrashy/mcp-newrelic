@@ -53,6 +53,22 @@ async def test_required_attributes_exist(client, account_id, event_type, attribu
     assert not missing, f"{event_type} is missing {missing} - queries or formatters reading them yield null"
 
 
+async def test_otel_http_metric_attributes_exist(client, account_id):
+    """get_app_performance/get_app_errors filter and aggregate OTel services on these."""
+    response = await client.base.query_nrql(
+        account_id,
+        "SELECT keyset() FROM Metric WHERE metricName = 'http.server.request.duration' SINCE 10 minutes ago",
+    )
+    present = {row["key"] for row in extract_nrql_results(response)}
+    assert present, "no OTel http.server.request.duration data; account may have no OTel services"
+    missing = [
+        key
+        for key in ("service.name", "http.server.request.duration", "http.response.status_code")
+        if key not in present
+    ]
+    assert not missing, f"OTel HTTP server metric is missing {missing}"
+
+
 async def test_percentile_returns_nested_dict(client, account_id):
     """_format_duration unwraps this shape; a flat float would mean the unwrap is dead code."""
     response = await client.base.query_nrql(

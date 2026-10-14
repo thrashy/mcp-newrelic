@@ -14,6 +14,9 @@ from .base_client import BaseNewRelicClient
 
 logger = logging.getLogger(__name__)
 
+OTEL_HTTP_DURATION = "http.server.request.duration"
+OTEL_HTTP_ERROR = "http.response.status_code >= 500 OR error.type IS NOT NULL"
+
 
 class MonitoringClient:
     """Client for New Relic monitoring APIs"""
@@ -36,23 +39,39 @@ class MonitoringClient:
             except API_ERRORS as e2:
                 return handle_api_error(operation, e2)
 
+    async def _query_otel_http(
+        self, account_id: str, service_name: str, hours: int, select: str
+    ) -> dict[str, Any] | None:
+        """Aggregate an OpenTelemetry service's HTTP server metric, or None if it reports none.
+
+        Aggregates return one row even with no data, so request_count is what tells
+        an OTel service apart from an APM app or a typo.
+        """
+        safe_name = escape_nrql_string(service_name)
+        query = (
+            f"SELECT {select}, count({OTEL_HTTP_DURATION}) as request_count FROM Metric "
+            f"WHERE service.name = '{safe_name}' SINCE {hours} hours ago"
+        )
+        rows = extract_nrql_results(await self._base.query_nrql(account_id, query))
+        if rows and rows[0].get("request_count"):
+            return {**rows[0], "source": "opentelemetry"}
+        return None
+
     async def get_applications(self, account_id: str) -> list[dict[str, Any]] | ApiError:
-        """Get list of applications"""
-        query = "SELECT uniques(appName) as 'applications' FROM Transaction SINCE 1 day ago LIMIT 100"
+        """List APM applications and OpenTelemetry services"""
+        queries = [
+            "SELECT uniques(appName) as 'applications' FROM Transaction SINCE 1 day ago LIMIT 100",
+            f"SELECT uniques(service.name, 1000) as 'applications' FROM Metric "
+            f"WHERE metricName = '{OTEL_HTTP_DURATION}' SINCE 1 hour ago",
+        ]
         try:
-            result = await self._base.query_nrql(account_id, query)
-            nrql_results = extract_nrql_results(result)
-            if not nrql_results:
+            names: dict[str, None] = {}
+            for query in queries:
+                for item in extract_nrql_results(await self._base.query_nrql(account_id, query)):
+                    names.update(dict.fromkeys(item.get("applications") or []))
+            if not names:
                 logger.warning("No applications found in NRQL results")
-                return []
-
-            apps = []
-            for item in nrql_results:
-                if "applications" in item and item["applications"]:
-                    for app_name in item["applications"]:
-                        apps.append({"name": app_name, "appName": app_name})
-
-            return apps
+            return [{"name": name, "appName": name} for name in names]
         except API_ERRORS as e:
             return handle_api_error("get applications", e)
 
@@ -72,13 +91,23 @@ class MonitoringClient:
         )
 
     async def get_error_metrics(self, account_id: str, app_name: str, hours: int = 1) -> dict[str, Any] | ApiError:
-        """Get error metrics for an application"""
+        """Get error metrics for an OpenTelemetry service or APM application"""
         safe_name = escape_nrql_string(app_name)
         query = (
             f"SELECT count(*) as error_count, average(duration) as avg_duration "
             f"FROM TransactionError WHERE appName = '{safe_name}' SINCE {hours} hours ago"
         )
         try:
+            otel = await self._query_otel_http(
+                account_id,
+                app_name,
+                hours,
+                f"filter(count({OTEL_HTTP_DURATION}), WHERE {OTEL_HTTP_ERROR}) as error_count, "
+                f"filter(average({OTEL_HTTP_DURATION}), WHERE {OTEL_HTTP_ERROR}) as avg_duration",
+            )
+            if otel:
+                return otel
+
             result = await self._base.query_nrql(account_id, query)
             nrql_results = extract_nrql_results(result)
 
@@ -100,7 +129,7 @@ class MonitoringClient:
     async def get_performance_metrics(
         self, account_id: str, app_name: str, hours: int = 1
     ) -> dict[str, Any] | ApiError:
-        """Get performance metrics for an application"""
+        """Get performance metrics for an OpenTelemetry service or APM application"""
         safe_name = escape_nrql_string(app_name)
         query = (
             f"SELECT average(duration) as avg_duration, percentile(duration, 95) as p95_duration, "
@@ -108,6 +137,17 @@ class MonitoringClient:
             f"WHERE appName = '{safe_name}' SINCE {hours} hours ago"
         )
         try:
+            otel = await self._query_otel_http(
+                account_id,
+                app_name,
+                hours,
+                f"average({OTEL_HTTP_DURATION}) as avg_duration, "
+                f"percentile({OTEL_HTTP_DURATION}, 95) as p95_duration, "
+                f"rate(count({OTEL_HTTP_DURATION}), 1 minute) as throughput",
+            )
+            if otel:
+                return otel
+
             result = await self._base.query_nrql(account_id, query)
             nrql_results = extract_nrql_results(result)
 

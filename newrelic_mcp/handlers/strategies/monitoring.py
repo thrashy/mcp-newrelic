@@ -22,6 +22,12 @@ class QueryNRQLHandler(ToolHandlerStrategy):
         ]
 
 
+def _format_source(metrics: dict[str, Any]) -> str:
+    if metrics.get("source") == "opentelemetry":
+        return f"\n- Source: OpenTelemetry HTTP server metrics ({metrics.get('request_count')} requests)"
+    return ""
+
+
 class AppPerformanceHandler(ToolHandlerStrategy):
     """Handler for application performance metrics"""
 
@@ -43,6 +49,7 @@ class AppPerformanceHandler(ToolHandlerStrategy):
             f"- Average response time: {avg_duration}\n"
             f"- 95th percentile: {p95_duration}\n"
             f"- Throughput: {throughput}"
+            f"{_format_source(metrics)}"
         )
 
     @staticmethod
@@ -70,6 +77,7 @@ class AppErrorsHandler(ToolHandlerStrategy):
             f"Error metrics for '{app_name}' (last {hours}h):\n"
             f"- Error count: {error_count}\n"
             f"- Average error duration: {avg_duration}"
+            f"{_format_source(metrics)}"
         )
 
 

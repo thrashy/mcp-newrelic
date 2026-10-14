@@ -318,11 +318,14 @@ def get_monitoring_tools() -> list[Tool]:
         ),
         Tool(
             name="get_app_performance",
-            description="Get performance metrics for a specific application",
+            description=(
+                "Get performance metrics for a specific application. Reads OpenTelemetry HTTP server metrics "
+                "(unsampled) when the name is an OTel service.name, otherwise APM transactions."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "app_name": {"type": "string", "description": "Name of the application"},
+                    "app_name": {"type": "string", "description": "APM appName or OpenTelemetry service.name"},
                     "hours": _hours_property(1),
                 },
                 "required": ["app_name"],
@@ -330,11 +333,14 @@ def get_monitoring_tools() -> list[Tool]:
         ),
         Tool(
             name="get_app_errors",
-            description="Get error metrics for a specific application",
+            description=(
+                "Get error metrics for a specific application. Reads OpenTelemetry HTTP server metrics "
+                "(unsampled) when the name is an OTel service.name, otherwise APM transactions."
+            ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "app_name": {"type": "string", "description": "Name of the application"},
+                    "app_name": {"type": "string", "description": "APM appName or OpenTelemetry service.name"},
                     "hours": _hours_property(1),
                 },
                 "required": ["app_name"],
