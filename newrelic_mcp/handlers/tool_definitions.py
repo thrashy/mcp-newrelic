@@ -113,8 +113,13 @@ Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for p
 **Threshold bands on line/area charts** (a shaded band from `from` to `to`; severity critical, warning or success):
 `{"thresholds": {"isLabelVisible": true, "thresholds": [{"name": "Timeout (500 ms)", "from": 490, "to": 520, "severity": "critical"}]}}`
 
-**Threshold colouring on billboards** (the value turns red/yellow once it passes `value`):
-`{"thresholds": [{"alertSeverity": "CRITICAL", "value": 500}, {"alertSeverity": "WARNING", "value": 300}]}`
+**Threshold colouring on billboards:** `thresholds` colours every value in the widget; `seriesOverrides` colours
+only the value whose alias matches `seriesName` (severity as the editor saves it, e.g. `success` or `critical`; `to` is optional):
+`{"thresholdsWithSeriesOverrides": {"thresholds": [], "seriesOverrides": [{"seriesName": "Failed calls", "from": 1, "severity": "critical"}]}}`
+The older `{"thresholds": [{"alertSeverity": ..., "value": ...}]}` form applies to every value, not one.
+
+**Several queries in one billboard:** list them in `nrqlQueries` (they may mix event types, e.g. Metric, Transaction
+and Log); each query's aliased values become tiles in order.
 
 **Chart line style:**
 `{"chartStyles": {"lineInterpolation": "linear"}}` (or "step", "smooth")
@@ -132,8 +137,9 @@ Example — query alias is 'My Series', NR renders it as 'My Series (99%)' for p
 ```
 Note: logarithmic scale is not supported by New Relic for line/area charts.
 
-**Choosing `widget_type`:** `bar` is a horizontal bar per FACET value and ignores TIMESERIES (a timeseries
-query renders as one bar). For counts over time use `stacked-bar` (columns per time bucket) or `line`/`area`.
+**Choosing `widget_type`:** `bar` draws one horizontal bar per FACET value, or one per selected value when there
+is no FACET (e.g. `SELECT ... AS 'Sonar', ... AS 'CAN'`), sorted by size. It ignores TIMESERIES (a timeseries query
+renders as one bar); for values over time use `stacked-bar` (columns per time bucket) or `line`/`area`.
 Other types: `billboard`, `table`, `pie`, `histogram`, `heatmap`, `bullet`, `funnel`, `json`, and `markdown`
 (text only: pass `text`, no query)."""
 
