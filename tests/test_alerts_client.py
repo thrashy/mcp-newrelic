@@ -267,12 +267,56 @@ class TestDeleteNotificationChannel:
         assert isinstance(result, ApiError)
 
 
+def _condition_response(condition_type: str = "STATIC", terms: list | None = None) -> dict:
+    condition = {"id": "c1", "type": condition_type, "terms": terms or []}
+    return {"data": {"actor": {"account": {"alerts": {"nrqlCondition": condition}}}}}
+
+
+def _update_response(mutation: str = "alertsNrqlConditionStaticUpdate") -> dict:
+    return {"data": {mutation: {"id": "c1", "name": "Cond", "enabled": True}}}
+
+
+class TestUpdateNRQLConditionType:
+    async def test_baseline_condition_uses_baseline_mutation(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(
+            side_effect=[_condition_response("BASELINE"), _update_response("alertsNrqlConditionBaselineUpdate")]
+        )
+        result = await client.update_nrql_condition("1234567", "c1", nrql_query="SELECT 1")
+        assert result["id"] == "c1"
+        mutation = client._base.execute_graphql.call_args.args[0]
+        assert "alertsNrqlConditionBaselineUpdate" in mutation
+        assert "AlertsNrqlConditionUpdateBaselineInput!" in mutation
+
+    async def test_static_condition_uses_static_mutation(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=[_condition_response(), _update_response()])
+        await client.update_nrql_condition("1234567", "c1", nrql_query="SELECT 1")
+        mutation = client._base.execute_graphql.call_args.args[0]
+        assert "alertsNrqlConditionStaticUpdate" in mutation
+        assert "AlertsNrqlConditionUpdateStaticInput!" in mutation
+
+    async def test_unsupported_type_is_rejected_without_mutating(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=[_condition_response("OUTLIER")])
+        result = await client.update_nrql_condition("1234567", "c1", name="Cond")
+        assert isinstance(result, ApiError)
+        assert "OUTLIER" in result.message
+        client._base.execute_graphql.assert_awaited_once()
+
+    async def test_missing_condition_returns_error(self):
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(
+            side_effect=[{"data": {"actor": {"account": {"alerts": {"nrqlCondition": None}}}}}]
+        )
+        result = await client.update_nrql_condition("1234567", "c1", name="Cond")
+        assert isinstance(result, ApiError)
+
+
 class TestUpdateNRQLConditionAggregationWindow:
     async def test_aggregation_window_sets_signal(self):
         client = _make_client()
-        client._base.execute_graphql.return_value = {
-            "data": {"alertsNrqlConditionStaticUpdate": {"id": "c1", "name": "Cond", "enabled": True}}
-        }
+        client._base.execute_graphql = AsyncMock(side_effect=[_condition_response(), _update_response()])
         result = await client.update_nrql_condition("1234567", "c1", aggregation_window=120)
         assert result["id"] == "c1"
         variables = client._base.execute_graphql.call_args.args[1]
@@ -280,9 +324,7 @@ class TestUpdateNRQLConditionAggregationWindow:
 
     async def test_omitted_when_not_provided(self):
         client = _make_client()
-        client._base.execute_graphql.return_value = {
-            "data": {"alertsNrqlConditionStaticUpdate": {"id": "c1", "name": "Cond", "enabled": True}}
-        }
+        client._base.execute_graphql = AsyncMock(side_effect=[_condition_response(), _update_response()])
         await client.update_nrql_condition("1234567", "c1", name="Cond")
         variables = client._base.execute_graphql.call_args.args[1]
         assert "signal" not in variables["condition"]
@@ -318,6 +360,7 @@ class TestNRQLConditionThresholdOccurrences:
                                 "alerts": {
                                     "nrqlCondition": {
                                         "id": "c1",
+                                        "type": "STATIC",
                                         "terms": [
                                             {
                                                 "operator": "ABOVE",

@@ -15,6 +15,12 @@ from .base_client import BaseNewRelicClient
 logger = logging.getLogger(__name__)
 
 
+NRQL_UPDATE_MUTATIONS = {
+    "STATIC": ("alertsNrqlConditionStaticUpdate", "AlertsNrqlConditionUpdateStaticInput"),
+    "BASELINE": ("alertsNrqlConditionBaselineUpdate", "AlertsNrqlConditionUpdateBaselineInput"),
+}
+
+
 class AlertsClient:
     """Client for New Relic alerts APIs"""
 
@@ -596,14 +602,13 @@ class AlertsClient:
             account(id: $accountId) {
               alerts {
                 nrqlCondition(id: $conditionId) {
-                  ... on AlertsNrqlStaticCondition {
-                    id
-                    name
-                    description
-                    enabled
-                    nrql { query }
-                    terms { operator priority threshold thresholdDuration thresholdOccurrences }
-                  }
+                  id
+                  name
+                  description
+                  enabled
+                  type
+                  nrql { query }
+                  terms { operator priority threshold thresholdDuration thresholdOccurrences }
                 }
               }
             }
@@ -639,38 +644,39 @@ class AlertsClient:
         threshold_occurrences: str | None = None,
     ) -> dict[str, Any] | ApiError:
         """Update an existing NRQL alert condition (fetch-then-merge for partial updates)."""
-        mutation = """
-        mutation($accountId: Int!, $id: ID!, $condition: AlertsNrqlConditionUpdateStaticInput!) {
-          alertsNrqlConditionStaticUpdate(accountId: $accountId, id: $id, condition: $condition) {
+        current = await self._get_nrql_condition(account_id, condition_id)
+        if isinstance(current, ApiError):
+            return current
+        condition_type = current.get("type")
+        if condition_type not in NRQL_UPDATE_MUTATIONS:
+            return ApiError(f"Updating {condition_type} NRQL conditions is not supported")
+        mutation_name, input_type = NRQL_UPDATE_MUTATIONS[condition_type]
+
+        mutation = f"""
+        mutation($accountId: Int!, $id: ID!, $condition: {input_type}!) {{
+          {mutation_name}(accountId: $accountId, id: $id, condition: $condition) {{
             id
             name
             enabled
-            nrql {
+            nrql {{
               query
-            }
-            terms {
+            }}
+            terms {{
               operator
               priority
               threshold
               thresholdDuration
               thresholdOccurrences
-            }
-          }
-        }
+            }}
+          }}
+        }}
         """
 
-        # Fetch current condition to merge with user-provided fields
         needs_term_update = any(
             v is not None for v in (threshold, threshold_operator, threshold_duration, priority, threshold_occurrences)
         )
-        if needs_term_update:
-            current = await self._get_nrql_condition(account_id, condition_id)
-            if isinstance(current, ApiError):
-                return current
-            existing_terms = current.get("terms", [{}])
-            existing_term = existing_terms[0] if existing_terms else {}
-        else:
-            existing_term = {}
+        existing_terms = current.get("terms") or [{}]
+        existing_term = existing_terms[0]
 
         condition_config: dict[str, Any] = {}
         if name is not None:
@@ -703,7 +709,7 @@ class AlertsClient:
         return await self._base.execute_mutation(
             mutation,
             {"accountId": int(account_id), "id": condition_id, "condition": condition_config},
-            "alertsNrqlConditionStaticUpdate",
+            mutation_name,
             "update NRQL condition",
         )
 
