@@ -244,8 +244,8 @@ Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/
 - **`create_alert_policy`**: Create alert policies with incident preferences
 - **`update_alert_policy`**: Update an existing alert policy
 - **`delete_alert_policy`**: Delete an alert policy by ID
-- **`create_nrql_condition`**: Create NRQL-based alert conditions
-- **`update_nrql_condition`**: Update an existing NRQL alert condition
+- **`create_nrql_condition`**: Create NRQL-based alert conditions (event flow aggregation with a 120s delay by default; event timer optional)
+- **`update_nrql_condition`**: Update an existing NRQL alert condition, including switching its aggregation method
 - **`delete_nrql_condition`**: Delete a NRQL alert condition by ID
 - **`create_notification_destination`**: Set up notification endpoints (email, Slack, webhook, PagerDuty)
 - **`delete_notification_destination`**: Delete a notification destination by ID
@@ -259,10 +259,10 @@ Enable writes only for trusted MCP clients. Booleans accept `true/false/1/0/yes/
 - **`update_muting_rule`**: Update a muting rule's name, conditions, schedule, or enabled state
 - **`delete_muting_rule`**: Delete a muting rule by ID
 - **`list_alert_policies`**: List all alert policies
-- **`list_alert_conditions`**: List alert conditions with optional filters by policy, name, or NRQL query
+- **`list_alert_conditions`**: List alert conditions with optional filters by policy, name, or NRQL query, showing threshold occurrences and signal settings
 - **`list_notification_destinations`**: List all notification destinations
 - **`list_notification_channels`**: List all notification channels
-- **`list_workflows`**: List all alert workflows
+- **`list_workflows`**: List alert workflows with their enabled state, issues filter and destinations, optionally filtered by name
 
 ## MCP Resources
 

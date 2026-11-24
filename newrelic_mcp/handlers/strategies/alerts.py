@@ -5,7 +5,7 @@ from typing import Any
 from mcp.types import TextContent
 
 from ...types import PaginatedResult
-from ...utils.alert_formatters import format_alert_condition, format_alert_policy
+from ...utils.alert_formatters import format_alert_condition, format_alert_policy, format_workflow
 from .base import ToolHandlerStrategy, make_delete_handler
 
 
@@ -56,6 +56,9 @@ class CreateNRQLConditionHandler(ToolHandlerStrategy):
                 aggregation_window,
                 description,
                 threshold_occurrences=threshold_occurrences,
+                aggregation_method=arguments.get("aggregation_method", "EVENT_FLOW"),
+                aggregation_delay=arguments.get("aggregation_delay"),
+                aggregation_timer=arguments.get("aggregation_timer"),
             ),
             f"creating NRQL condition '{name}'",
         )
@@ -196,6 +199,9 @@ class UpdateNRQLConditionHandler(ToolHandlerStrategy):
                 priority=arguments.get("priority"),
                 aggregation_window=arguments.get("aggregation_window"),
                 threshold_occurrences=arguments.get("threshold_occurrences"),
+                aggregation_method=arguments.get("aggregation_method"),
+                aggregation_delay=arguments.get("aggregation_delay"),
+                aggregation_timer=arguments.get("aggregation_timer"),
             ),
             f"updating condition '{condition_id}'",
         )
@@ -441,18 +447,15 @@ class ListNotificationChannelsHandler(ToolHandlerStrategy):
 class ListWorkflowsHandler(ToolHandlerStrategy):
     """Handler for listing workflows"""
 
-    async def handle(self, _arguments: dict[str, Any], account_id: str) -> list[TextContent]:
+    async def handle(self, arguments: dict[str, Any], account_id: str) -> list[TextContent]:
         result = await self.client.alerts.get_workflows(account_id)
+        name = (arguments.get("name") or "").lower()
+        if name and isinstance(result, PaginatedResult):
+            result = PaginatedResult(items=[w for w in result.items if name in (w.get("name") or "").lower()])
         return self._handle_list_response(
             result,
             error_context="listing workflows",
             empty_message="No workflows found.",
             item_noun="workflows",
-            format_item=self._format_workflow,
+            format_item=format_workflow,
         )
-
-    @staticmethod
-    def _format_workflow(workflow: dict[str, Any]) -> str:
-        name = workflow.get("name", "Unknown")
-        workflow_id = workflow.get("id", "Unknown")
-        return f"- **{name}**\n  ID: {workflow_id}\n\n"

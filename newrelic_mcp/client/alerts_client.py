@@ -20,6 +20,36 @@ NRQL_UPDATE_MUTATIONS = {
     "BASELINE": ("alertsNrqlConditionBaselineUpdate", "AlertsNrqlConditionUpdateBaselineInput"),
 }
 
+DEFAULT_EVENT_FLOW_DELAY = 120
+
+
+def _signal_input(
+    aggregation_window: int | None,
+    aggregation_method: str | None,
+    aggregation_delay: int | None,
+    aggregation_timer: int | None,
+) -> dict[str, Any]:
+    """Build a NRQL condition signal. Setting a method nulls the cadence offset and the other method's setting,
+    because NerdGraph rejects an update that leaves a stored evaluationOffset next to an aggregationMethod."""
+    signal: dict[str, Any] = {}
+    if aggregation_window is not None:
+        signal["aggregationWindow"] = aggregation_window
+    if aggregation_method is not None:
+        signal["aggregationMethod"] = aggregation_method
+        signal["evaluationOffset"] = None
+        signal["aggregationDelay"] = (
+            (aggregation_delay if aggregation_delay is not None else DEFAULT_EVENT_FLOW_DELAY)
+            if aggregation_method == "EVENT_FLOW"
+            else None
+        )
+        signal["aggregationTimer"] = aggregation_timer if aggregation_method == "EVENT_TIMER" else None
+    else:
+        if aggregation_delay is not None:
+            signal["aggregationDelay"] = aggregation_delay
+        if aggregation_timer is not None:
+            signal["aggregationTimer"] = aggregation_timer
+    return signal
+
 
 class AlertsClient:
     """Client for New Relic alerts APIs"""
@@ -63,6 +93,9 @@ class AlertsClient:
         aggregation_window: int = 60,
         description: str | None = None,
         threshold_occurrences: str = "AT_LEAST_ONCE",
+        aggregation_method: str = "EVENT_FLOW",
+        aggregation_delay: int | None = None,
+        aggregation_timer: int | None = None,
     ) -> dict[str, Any] | ApiError:
         """Create a NRQL alert condition"""
         mutation = """
@@ -76,7 +109,9 @@ class AlertsClient:
             }
             signal {
               aggregationWindow
-              evaluationOffset
+              aggregationMethod
+              aggregationDelay
+              aggregationTimer
             }
             terms {
               operator
@@ -89,11 +124,12 @@ class AlertsClient:
         }
         """
 
+        signal = _signal_input(aggregation_window, aggregation_method, aggregation_delay, aggregation_timer)
         condition_config: dict[str, Any] = {
             "name": name,
             "enabled": True,
             "nrql": {"query": nrql_query},
-            "signal": {"aggregationWindow": aggregation_window, "evaluationOffset": 3},
+            "signal": {k: v for k, v in signal.items() if v is not None},
             "terms": [
                 {
                     "operator": threshold_operator,
@@ -353,6 +389,9 @@ class AlertsClient:
                     }
                     signal {
                       aggregationWindow
+                      aggregationMethod
+                      aggregationDelay
+                      aggregationTimer
                       evaluationOffset
                       fillOption
                     }
@@ -475,6 +514,7 @@ class AlertsClient:
                   entities {
                     id
                     name
+                    workflowEnabled
                     destinationConfigurations {
                       channelId
                       name
@@ -642,6 +682,9 @@ class AlertsClient:
         priority: str | None = None,
         aggregation_window: int | None = None,
         threshold_occurrences: str | None = None,
+        aggregation_method: str | None = None,
+        aggregation_delay: int | None = None,
+        aggregation_timer: int | None = None,
     ) -> dict[str, Any] | ApiError:
         """Update an existing NRQL alert condition (fetch-then-merge for partial updates)."""
         current = await self._get_nrql_condition(account_id, condition_id)
@@ -668,6 +711,12 @@ class AlertsClient:
               thresholdDuration
               thresholdOccurrences
             }}
+            signal {{
+              aggregationWindow
+              aggregationMethod
+              aggregationDelay
+              aggregationTimer
+            }}
           }}
         }}
         """
@@ -687,8 +736,9 @@ class AlertsClient:
             condition_config["enabled"] = enabled
         if description is not None:
             condition_config["description"] = description
-        if aggregation_window is not None:
-            condition_config["signal"] = {"aggregationWindow": aggregation_window}
+        signal = _signal_input(aggregation_window, aggregation_method, aggregation_delay, aggregation_timer)
+        if signal:
+            condition_config["signal"] = signal
         if needs_term_update:
             condition_config["terms"] = [
                 {
@@ -978,7 +1028,7 @@ class AlertsClient:
         if destination_configurations is not None:
             update_data["destinationConfigurations"] = destination_configurations
         if issues_filter is not None:
-            update_data["issuesFilter"] = issues_filter
+            update_data["issuesFilter"] = {"filterInput": issues_filter}
 
         update_result = await self._base.execute_mutation(
             mutation,

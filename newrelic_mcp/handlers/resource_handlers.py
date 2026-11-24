@@ -9,7 +9,7 @@ from mcp.types import Resource
 from ..client import NewRelicClient
 from ..config import NewRelicConfig
 from ..types import ApiError, PaginatedResult
-from ..utils.alert_formatters import format_alert_condition, format_alert_policy
+from ..utils.alert_formatters import format_alert_condition, format_alert_policy, format_workflow
 from ..utils.dashboard_formatters import format_dashboard_list
 from ..utils.error_handling import format_resource_error
 
@@ -153,31 +153,5 @@ class ResourceHandlers:
             await self.client.alerts.get_workflows(account_id),
             title="Alert Workflows",
             noun="alert workflows",
-            format_item=self._format_workflow_info,
+            format_item=format_workflow,
         )
-
-    @staticmethod
-    def _format_workflow_info(workflow: dict) -> str:
-        name = workflow.get("name", "Unknown")
-        workflow_id = workflow.get("id", "Unknown")
-        enabled = workflow.get("enabled", False)
-        destinations = workflow.get("destinationConfigurations", [])
-        issues_filter = workflow.get("issuesFilter", {})
-
-        result = f"## {name}\n"
-        result += f"- **Workflow ID**: {workflow_id}\n"
-        result += f"- **Enabled**: {enabled}\n"
-        result += f"- **Destinations**: {len(destinations)} configured\n"
-
-        if destinations:
-            result += "- **Destination Details**:\n"
-            for dest in destinations[:3]:
-                dest_name = dest.get("name", "Unknown")
-                dest_type = dest.get("type", "Unknown")
-                result += f"  - {dest_name} ({dest_type})\n"
-            if len(destinations) > 3:
-                result += f"  - ... and {len(destinations) - 3} more\n"
-
-        filter_name = issues_filter.get("name", "No filter")
-        result += f"- **Filter**: {filter_name}\n\n"
-        return result

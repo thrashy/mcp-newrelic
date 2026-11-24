@@ -226,6 +226,20 @@ class TestUpdateWorkflow:
         variables = client._base.execute_graphql.call_args.args[1]
         assert variables["updateWorkflowData"]["destinationConfigurations"] == [{"channelId": "ch9"}]
 
+    async def test_issues_filter_wrapped_in_filter_input(self):
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"aiWorkflowsUpdateWorkflow": {"workflow": {"id": "wf1"}, "errors": None}}
+        }
+        issues_filter = {
+            "name": "f",
+            "type": "FILTER",
+            "predicates": [{"attribute": "labels.policyIds", "operator": "EXACTLY_MATCHES", "values": ["1"]}],
+        }
+        await client.update_workflow("1234567", "wf1", issues_filter=issues_filter)
+        variables = client._base.execute_graphql.call_args.args[1]
+        assert variables["updateWorkflowData"]["issuesFilter"] == {"filterInput": issues_filter}
+
     async def test_with_errors(self):
         client = _make_client()
         client._base.execute_graphql.return_value = {
@@ -328,6 +342,52 @@ class TestUpdateNRQLConditionAggregationWindow:
         await client.update_nrql_condition("1234567", "c1", name="Cond")
         variables = client._base.execute_graphql.call_args.args[1]
         assert "signal" not in variables["condition"]
+
+
+class TestNRQLConditionAggregationMethod:
+    async def _create_signal(self, **kwargs) -> dict:
+        client = _make_client()
+        client._base.execute_graphql.return_value = {
+            "data": {"alertsNrqlConditionStaticCreate": {"id": "c1", "name": "T", "enabled": True}}
+        }
+        await client.create_nrql_condition("1234567", "p1", "T", "SELECT 1", 1.0, **kwargs)
+        return client._base.execute_graphql.call_args.args[1]["condition"]["signal"]
+
+    async def _update_signal(self, **kwargs) -> dict:
+        client = _make_client()
+        client._base.execute_graphql = AsyncMock(side_effect=[_condition_response(), _update_response()])
+        await client.update_nrql_condition("1234567", "c1", **kwargs)
+        return client._base.execute_graphql.call_args.args[1]["condition"]["signal"]
+
+    async def test_create_defaults_to_event_flow_not_cadence(self):
+        signal = await self._create_signal()
+        assert signal == {"aggregationWindow": 60, "aggregationMethod": "EVENT_FLOW", "aggregationDelay": 120}
+
+    async def test_create_event_timer_sends_timer_only(self):
+        signal = await self._create_signal(aggregation_method="EVENT_TIMER", aggregation_timer=30)
+        assert signal == {"aggregationWindow": 60, "aggregationMethod": "EVENT_TIMER", "aggregationTimer": 30}
+
+    async def test_update_to_event_flow_clears_offset_and_timer(self):
+        signal = await self._update_signal(aggregation_method="EVENT_FLOW")
+        assert signal == {
+            "aggregationMethod": "EVENT_FLOW",
+            "evaluationOffset": None,
+            "aggregationDelay": 120,
+            "aggregationTimer": None,
+        }
+
+    async def test_update_to_event_timer_clears_offset_and_delay(self):
+        signal = await self._update_signal(aggregation_method="EVENT_TIMER", aggregation_timer=30)
+        assert signal == {
+            "aggregationMethod": "EVENT_TIMER",
+            "evaluationOffset": None,
+            "aggregationDelay": None,
+            "aggregationTimer": 30,
+        }
+
+    async def test_update_delay_alone_keeps_method(self):
+        signal = await self._update_signal(aggregation_delay=60)
+        assert signal == {"aggregationDelay": 60}
 
 
 class TestNRQLConditionThresholdOccurrences:

@@ -121,6 +121,32 @@ class TestListAlertConditionsHandler:
         assert "Cond A" in result[0].text
         mock_client.alerts.get_alert_conditions.assert_called_once_with("1234567", "p1", name=None, query=None)
 
+    async def test_shows_occurrences_and_signal(self, mock_client, config):
+        mock_client.alerts.get_alert_conditions.return_value = PaginatedResult(
+            items=[
+                {
+                    "name": "P99",
+                    "id": "c1",
+                    "terms": [
+                        {
+                            "priority": "CRITICAL",
+                            "operator": "ABOVE",
+                            "threshold": 500.0,
+                            "thresholdDuration": 60,
+                            "thresholdOccurrences": "AT_LEAST_ONCE",
+                        }
+                    ],
+                    "signal": {"aggregationWindow": 60, "aggregationMethod": "EVENT_FLOW", "aggregationDelay": 120},
+                },
+                {"name": "Legacy", "id": "c2", "signal": {"aggregationWindow": 60, "evaluationOffset": 3}},
+            ]
+        )
+        handler = ListAlertConditionsHandler(mock_client, config)
+        text = (await handler.handle({}, "1234567"))[0].text
+        assert "Critical: above 500.0 for 60s (at least once)" in text
+        assert "Signal: 60s window, event flow, 120s delay" in text
+        assert "Signal: 60s window, evaluation offset 3 windows" in text
+
     async def test_calls_get_alert_conditions_without_policy_id(self, mock_client, config):
         mock_client.alerts.get_alert_conditions.return_value = PaginatedResult(items=[])
         handler = ListAlertConditionsHandler(mock_client, config)
@@ -168,6 +194,31 @@ class TestListWorkflowsHandler:
         result = await handler.handle({}, "1234567")
         assert "Prod Alerts" in result[0].text
         assert "wf1" in result[0].text
+
+    async def test_shows_filter_destinations_and_filters_by_name(self, mock_client, config):
+        mock_client.alerts.get_workflows.return_value = PaginatedResult(
+            items=[
+                {
+                    "name": "Policy 7579050: [Sonar API]",
+                    "id": "wf1",
+                    "workflowEnabled": True,
+                    "issuesFilter": {
+                        "predicates": [
+                            {"attribute": "labels.policyIds", "operator": "EXACTLY_MATCHES", "values": ["7579050"]}
+                        ]
+                    },
+                    "destinationConfigurations": [{"name": "amlg-sonar-prod-alerts", "type": "SLACK"}],
+                },
+                {"name": "Other", "id": "wf2"},
+            ]
+        )
+        handler = ListWorkflowsHandler(mock_client, config)
+        text = (await handler.handle({"name": "sonar"}, "1234567"))[0].text
+        assert "Found 1 workflows" in text
+        assert "Enabled: True" in text
+        assert "labels.policyIds EXACTLY_MATCHES ['7579050']" in text
+        assert "amlg-sonar-prod-alerts (SLACK)" in text
+        assert "Other" not in text
 
 
 class TestCreateWorkflowHandler:

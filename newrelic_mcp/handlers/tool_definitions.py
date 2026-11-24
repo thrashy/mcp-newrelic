@@ -144,6 +144,52 @@ Other types: `billboard`, `table`, `pie`, `histogram`, `heatmap`, `bullet`, `fun
 (text only: pass `text`, no query)."""
 
 
+_WORKFLOW_PREDICATE_OPERATORS = [
+    "EQUAL",
+    "DOES_NOT_EQUAL",
+    "EXACTLY_MATCHES",
+    "DOES_NOT_EXACTLY_MATCH",
+    "CONTAINS",
+    "DOES_NOT_CONTAIN",
+    "STARTS_WITH",
+    "ENDS_WITH",
+    "IS",
+    "IS_NOT",
+    "GREATER_THAN",
+    "GREATER_OR_EQUAL",
+    "LESS_THAN",
+    "LESS_OR_EQUAL",
+]
+
+_WORKFLOW_PREDICATE_OPERATOR_SCHEMA: dict[str, Any] = {
+    "type": "string",
+    "description": "Use EXACTLY_MATCHES for id lists such as labels.policyIds; EQUAL is accepted there but never matches",
+    "enum": _WORKFLOW_PREDICATE_OPERATORS,
+}
+
+_AGGREGATION_SCHEMA: dict[str, Any] = {
+    "aggregation_method": {
+        "type": "string",
+        "description": (
+            "EVENT_FLOW (default for steady data) closes a window once data arrives aggregation_delay seconds "
+            "past it. EVENT_TIMER (sparse data) closes it aggregation_timer seconds after its last data point."
+        ),
+        "enum": ["EVENT_FLOW", "EVENT_TIMER"],
+    },
+    "aggregation_delay": {
+        "type": "integer",
+        "description": "EVENT_FLOW delay in seconds (default 120)",
+        "minimum": 0,
+        "maximum": 1200,
+    },
+    "aggregation_timer": {
+        "type": "integer",
+        "description": "EVENT_TIMER timer in seconds",
+        "minimum": 5,
+        "maximum": 1200,
+    },
+}
+
 _MUTING_RULE_CONDITIONS_SCHEMA: dict[str, Any] = {
     "type": "array",
     "description": "Conditions that define which alerts to mute",
@@ -764,6 +810,7 @@ def get_alert_tools() -> list[Tool]:
                         "minimum": 30,
                         "maximum": 1200,
                     },
+                    **_AGGREGATION_SCHEMA,
                 },
                 "required": ["policy_id", "name", "nrql_query", "threshold"],
             },
@@ -840,10 +887,7 @@ def get_alert_tools() -> list[Tool]:
                             "type": "object",
                             "properties": {
                                 "attribute": {"type": "string"},
-                                "operator": {
-                                    "type": "string",
-                                    "enum": ["EQUAL", "NOT_EQUAL", "IN", "NOT_IN", "CONTAINS", "DOES_NOT_CONTAIN"],
-                                },
+                                "operator": _WORKFLOW_PREDICATE_OPERATOR_SCHEMA,
                                 "values": {"type": "array", "items": {"type": "string"}},
                             },
                             "required": ["attribute", "operator", "values"],
@@ -925,6 +969,7 @@ def get_alert_tools() -> list[Tool]:
                         "minimum": 30,
                         "maximum": 1200,
                     },
+                    **_AGGREGATION_SCHEMA,
                 },
                 "required": ["condition_id"],
             },
@@ -998,17 +1043,7 @@ def get_alert_tools() -> list[Tool]:
                                     "type": "object",
                                     "properties": {
                                         "attribute": {"type": "string"},
-                                        "operator": {
-                                            "type": "string",
-                                            "enum": [
-                                                "EQUAL",
-                                                "NOT_EQUAL",
-                                                "IN",
-                                                "NOT_IN",
-                                                "CONTAINS",
-                                                "DOES_NOT_CONTAIN",
-                                            ],
-                                        },
+                                        "operator": _WORKFLOW_PREDICATE_OPERATOR_SCHEMA,
                                         "values": {"type": "array", "items": {"type": "string"}},
                                     },
                                     "required": ["attribute", "operator", "values"],
@@ -1147,8 +1182,16 @@ def get_alert_tools() -> list[Tool]:
         ),
         Tool(
             name="list_workflows",
-            description="List all alert workflows",
-            input_schema={"type": "object", "properties": {}},
+            description="List alert workflows with their enabled state, issues filter and destinations",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Only workflows whose name contains this text, case-insensitive (optional)",
+                    },
+                },
+            },
         ),
     ]
 
